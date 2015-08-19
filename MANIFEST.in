@@ -1,0 +1,6 @@
+include *.txt
+recursive-include docs *.txt
+recursive-include autorank *.txt
+include README.md
+include LICENSE
+include ./autorank/VERSION
