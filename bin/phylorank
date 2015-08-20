@@ -29,14 +29,14 @@ import sys
 import tempfile
 import argparse
 
-from autorank.main import OptionsParser
+from phylorank.main import OptionsParser
 from biolib.misc.custom_help_formatter import CustomHelpFormatter
 
 
 def version():
     """Read program version from file."""
     bin_dir = os.path.dirname(os.path.realpath(__file__))
-    version_file = open(os.path.join(bin_dir, '..', 'autorank', 'VERSION'))
+    version_file = open(os.path.join(bin_dir, '..', 'phylorank', 'VERSION'))
     return version_file.read().strip()
 
 
@@ -44,7 +44,7 @@ def print_help():
     """Help menu."""
 
     print ''
-    print '                ...::: AutoRank v' + version() + ' :::...'''
+    print '                ...::: PhyloRank v' + version() + ' :::...'''
     print '''\
 
   decorate -> Decorate nodes with inferred taxonomic ranks.
