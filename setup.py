@@ -12,7 +12,7 @@ setup(
     version=version(),
     author='Donovan Parks',
     author_email='donovan.parks@gmail.com',
-    packages=['phylorank'],
+    packages=['phylorank', 'phylorank.plot'],
     scripts=['bin/phylorank'],
     package_data={'phylorank' : ['VERSION']},
     url='http://pypi.python.org/pypi/phylorank/',

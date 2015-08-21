@@ -19,7 +19,8 @@ import os
 import sys
 import logging
 
-from autorank.decorate import Decorate
+from phylorank.decorate import Decorate
+from phylorank.plot.robustness_plot import RobustnessPlot
 
 from biolib.common import (make_sure_path_exists,
                            check_dir_exists,
@@ -38,18 +39,37 @@ class OptionsParser():
         """Decorate command"""
         self.logger.info('')
         self.logger.info('*******************************************************************************')
-        self.logger.info(' [Autorank - decorate] Decorating nodes with inferred taxonomic ranks.')
+        self.logger.info(' [PhyloRank - decorate] Decorating nodes with inferred taxonomic ranks.')
         self.logger.info('*******************************************************************************')
 
         check_file_exists(options.input_tree)
 
         decorate = Decorate()
         decorate.run(options.input_tree,
-                     options.output_tree,
-                     options.min_support,
-                     options.named_clades,
-                     options.only_named_clades,
-                     options.min_length)
+                        options.output_tree,
+                        options.min_support,
+                        options.named_clades,
+                        options.only_named_clades,
+                        options.min_length)
+
+        self.time_keeper.print_time_stamp()
+
+    def robustness_plot(self, options):
+        """Robustness plot command"""
+        self.logger.info('')
+        self.logger.info('*******************************************************************************')
+        self.logger.info(' [PhyloRank - robustness_plot] Plotting distances across a set of tree.')
+        self.logger.info('*******************************************************************************')
+
+        robustness_plot = RobustnessPlot()
+        robustness_plot.run(options.rank,
+                                options.input_tree_dir,
+                                options.full_tree_file,
+                                options.derep_tree_file,
+                                options.taxonomy_file,
+                                options.output_prefix,
+                                options.min_children,
+                                options.title)
 
         self.time_keeper.print_time_stamp()
 
@@ -62,6 +82,8 @@ class OptionsParser():
 
         if(options.subparser_name == 'decorate'):
             self.decorate(options)
+        elif(options.subparser_name == 'robustness_plot'):
+            self.robustness_plot(options)
         else:
             self.logger.error('  [Error] Unknown AutoRank command: ' + options.subparser_name + '\n')
             sys.exit()

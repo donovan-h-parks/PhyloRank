@@ -26,7 +26,6 @@ __status__ = "Development"
 
 import os
 import sys
-import tempfile
 import argparse
 
 from phylorank.main import OptionsParser
@@ -49,7 +48,12 @@ def print_help():
 
   decorate -> Decorate nodes with inferred taxonomic ranks.
 
-  Use: autorank <command> -h for command specific help.
+  [Expert commands: hide these at some point]
+
+  robustness_plot -> Plot relative distance of groups across a set of trees.
+  dist_plot       -> Plot distribution of ranks.
+
+  Use: phylorank <command> -h for command specific help.
 
   Feature requests or bug reports can be sent to Donovan Parks (donovan.parks@gmail.com)
     or posted on GitHub (https://github.com/dparks1134/autorank).
@@ -71,6 +75,20 @@ if __name__ == '__main__':
     decorate_parser.add_argument('-s', '--min_support', help="only decorate nodes above the specified support value", type=int, default=0)
     decorate_parser.add_argument('-n', '--only_named_clades', help="only decorate nodes with an existing label", action='store_true')
     decorate_parser.add_argument('-l', '--min_length', help="only decorate nodes with a parent branch above the specified length", type=float, default=0.0)
+
+    # plot relative distance of groups across a set of trees.
+    robustness_plot_parser = subparsers.add_parser('robustness_plot',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Plot relative distance of groups across a set of trees')
+
+    robustness_plot_parser.add_argument('rank', help="taxonomic rank of named groups to plot", type=int, choices=[1, 2, 3, 4, 5, 6])
+    robustness_plot_parser.add_argument('input_tree_dir', help="directory containing trees to inferred relative distance across")
+    robustness_plot_parser.add_argument('full_tree_file', help="unmodified tree to include in plot; must be decorate with taxonomy")
+    robustness_plot_parser.add_argument('derep_tree_file', help="dereplicated tree to include in plot")
+    robustness_plot_parser.add_argument('taxonomy_file', help="file indicating taxonomy string for each genome")
+    robustness_plot_parser.add_argument('output_prefix', help="output prefix for generated files")
+    robustness_plot_parser.add_argument('-m', '--min_children', help='minimum named child taxa to consider taxa', type=int, default=2)
+    robustness_plot_parser.add_argument('-t', '--title', help='title of plot', default=None)
 
     # get and check options
     args = None
