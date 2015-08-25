@@ -91,10 +91,25 @@ class OptionsParser():
         self.logger.info(' [PhyloRank - validate] Validating consistency of taxonomy.')
         self.logger.info('*******************************************************************************')
 
-        check_file_exists(options.input_tree)
+        check_file_exists(options.taxonomy_file)
+
+        taxonomy = Taxonomy()
+        t = taxonomy.read(options.taxonomy_file)
+
+        invalid_ranks, invalid_prefixes, invalid_hierarchies = taxonomy.validate(t,
+                                                                                 not options.no_prefix,
+                                                                                 not options.no_all_ranks,
+                                                                                 not options.no_hierarhcy,
+                                                                                 not options.no_species,
+                                                                                 True)
 
         self.logger.info('')
-        self.logger.info('  Taxonomy strings written to: %s' % options.output_file)
+        if len(invalid_ranks) == 0 and len(invalid_prefixes) == 0 and len(invalid_hierarchies) == 0:
+            self.logger.info('  No errors identified in taxonomy file.')
+        else:
+            self.logger.info('  Identified %d incomplete taxonomy strings.' % len(invalid_ranks))
+            self.logger.info('  Identified %d rank prefix errors.' % len(invalid_prefixes))
+            self.logger.info('  Identified %d errors in the hierarchy.' % len(invalid_hierarchies))
 
         self.time_keeper.print_time_stamp()
 

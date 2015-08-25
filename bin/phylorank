@@ -101,6 +101,10 @@ if __name__ == '__main__':
                                             description='Validate consistency of taxonomy.')
 
     validate_parser.add_argument('taxonomy_file', help="file with taxonomy for extant taxa")
+    validate_parser.add_argument('--no_prefix', action="store_true", help="do not check taxon prefixes")
+    validate_parser.add_argument('--no_all_ranks', action="store_true", help="do not check for the presence of all ranks")
+    validate_parser.add_argument('--no_hierarhcy', action="store_true", help="do not check for inconsistencies in the taxonomic hierarchy")
+    validate_parser.add_argument('--no_species', action="store_true", help="do not check for hierarchical inconsistencies with named species")
 
     # append taxonomy to extant tree labels
     append_parser = subparsers.add_parser('append',
