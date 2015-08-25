@@ -42,16 +42,8 @@ class RobustnessPlot(AbstractPlot):
         """Initialize."""
         AbstractPlot.__init__(self, None)
 
-    def rel_dist_to_named_clades(self, tree, groups_to_consider, groups):
-        """Determine relative distance to named clades.
-
-        Relative distance is calculated as:
-          dist_to_root / (dist_to_root + average_dist)
-
-          where dist_to_root is the distance from a
-          named clade to the specified starting node,
-          and average_dist is the average distance from
-          the named clade to all leaf nodes.
+    def rel_dist_to_specified_groups(self, tree, groups_to_consider, groups):
+        """Determine relative distance to specified named clades.
 
         Parameters
         ----------
@@ -72,9 +64,11 @@ class RobustnessPlot(AbstractPlot):
         if not isinstance(root, TreeNode):
             root = TreeNode.read(root, convert_underscores=False)
 
+        # calculate relative distance for all nodes
         infer_rank = InferRank()
         infer_rank.decorate_rel_dist(root)
 
+        # gather information for nodes of interest
         rel_dists_to_taxon = {}
         dist_components_taxon = {}
         polyphyletic = set()
@@ -147,7 +141,7 @@ class RobustnessPlot(AbstractPlot):
         print ''
         print 'Calculating relative distance over full tree.'
         tree = TreeNode.read(full_tree_file, convert_underscores=False)
-        full_rel_dist, _full_dist_components, polyphyletic = self.rel_dist_to_named_clades(tree, groups_to_consider, groups)
+        full_rel_dist, _full_dist_components, polyphyletic = self.rel_dist_to_specified_groups(tree, groups_to_consider, groups)
         if len(polyphyletic) > 0:
             print ''
             print '[Warning] Full tree contains polyphyletic groups.'
@@ -156,7 +150,7 @@ class RobustnessPlot(AbstractPlot):
         print ''
         print 'Calculating relative distance over dereplicated tree.'
         tree = TreeNode.read(derep_tree_file, convert_underscores=False)
-        derep_rel_dist, derep_dist_components, polyphyletic = self.rel_dist_to_named_clades(tree, groups_to_consider, groups)
+        derep_rel_dist, derep_dist_components, polyphyletic = self.rel_dist_to_specified_groups(tree, groups_to_consider, groups)
 
         groups_to_consider = groups_to_consider - polyphyletic
         print 'Assessing distriubtion over %d groups after removing polyphyletic groups in original trees.' % len(groups_to_consider)
@@ -175,7 +169,7 @@ class RobustnessPlot(AbstractPlot):
             tree = TreeNode.read(tree_file, convert_underscores=False)
 
             # calculate relative distance to named taxa
-            rel_dist, components, _polyphyletic = self.rel_dist_to_named_clades(tree, groups_to_consider, groups)
+            rel_dist, components, _polyphyletic = self.rel_dist_to_specified_groups(tree, groups_to_consider, groups)
 
             for taxon, dist in rel_dist.iteritems():
                 rel_dists[taxon].append(dist)

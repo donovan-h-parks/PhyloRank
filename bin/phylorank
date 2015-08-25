@@ -26,6 +26,7 @@ __status__ = "Development"
 
 import os
 import sys
+import json
 import argparse
 
 from phylorank.main import OptionsParser
@@ -46,12 +47,19 @@ def print_help():
     print '                ...::: PhyloRank v' + version() + ' :::...'''
     print '''\
 
-  decorate -> Decorate nodes with inferred taxonomic ranks.
+  decorate    -> Decorate nodes with inferred taxonomic ranks.
+  dist_plot   -> Plot distribution of groups in each taxonomic rank.
+
+  pull        -> Pull taxonomy information from tree.
+  validate    -> Validate consistency of taxonomy.
+  append      -> Append taxonomy to extant tree labels.
+  taxon_stats -> Summary statistics of taxonomic groups.
+
 
   [Expert commands: hide these at some point]
 
   robustness_plot -> Plot relative distance of groups across a set of trees.
-  dist_plot       -> Plot distribution of ranks.
+
 
   Use: phylorank <command> -h for command specific help.
 
@@ -72,9 +80,44 @@ if __name__ == '__main__':
 
     decorate_parser.add_argument('input_tree', help="input tree to decorate")
     decorate_parser.add_argument('output_tree', help="output tree with assigned taxonomic ranks")
-    decorate_parser.add_argument('-s', '--min_support', help="only decorate nodes above the specified support value", type=int, default=0)
+    decorate_parser.add_argument('-t', '--thresholds', help="relative divergence thresholds for taxonomic ranks", type=json.loads,
+                                    default='{"d": 0.33, "p": 0.56, "c": 0.65, "o": 0.78, "f": 0.92, "g": 0.99}')
+    decorate_parser.add_argument('-s', '--min_support', help="only decorate nodes above the specified support value", type=float, default=0)
     decorate_parser.add_argument('-n', '--only_named_clades', help="only decorate nodes with an existing label", action='store_true')
     decorate_parser.add_argument('-l', '--min_length', help="only decorate nodes with a parent branch above the specified length", type=float, default=0.0)
+
+    # pull taxonomy strings from tree
+    pull_parser = subparsers.add_parser('pull',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Pull taxonomy information from tree.')
+
+    pull_parser.add_argument('input_tree', help="input tree to extract taxonomy from")
+    pull_parser.add_argument('output_file', help="file to contain taxonomy strings for each extant taxon")
+    pull_parser.add_argument('--no_rank_fill', action="store_true", help="do not automatically fill in missing ranks")
+
+    # validate consistency of taxonomy
+    validate_parser = subparsers.add_parser('validate',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Validate consistency of taxonomy.')
+
+    validate_parser.add_argument('taxonomy_file', help="file with taxonomy for extant taxa")
+
+    # append taxonomy to extant tree labels
+    append_parser = subparsers.add_parser('append',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Append taxonomy to extant tree labels.')
+
+    append_parser.add_argument('input_tree', help="input tree to decorate")
+    append_parser.add_argument('taxonomy_file', help="file with taxonomy for extant taxa")
+    append_parser.add_argument('output_tree', help="output tree with taxonomy appended to extant taxon labels")
+
+    # summary statistics of taxonomic groups
+    taxon_stats_parser = subparsers.add_parser('taxon_stats',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Summary statistics of taxonomic groups.')
+
+    taxon_stats_parser.add_argument('taxonomy_file', help="file with taxonomy for extant taxa")
+    taxon_stats_parser.add_argument('output_file', help="output file with summary statistics")
 
     # plot relative distance of groups across a set of trees.
     robustness_plot_parser = subparsers.add_parser('robustness_plot',
@@ -89,6 +132,17 @@ if __name__ == '__main__':
     robustness_plot_parser.add_argument('output_prefix', help="output prefix for generated files")
     robustness_plot_parser.add_argument('-m', '--min_children', help='minimum named child taxa to consider taxa', type=int, default=2)
     robustness_plot_parser.add_argument('-t', '--title', help='title of plot', default=None)
+
+    # plot distribution of groups in each taxonomic rank
+    dist_plot_parser = subparsers.add_parser('dist_plot',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Plot distribution of groups in each taxonomic rank')
+
+    dist_plot_parser.add_argument('input_tree', help="directory containing trees to inferred relative distance across")
+    dist_plot_parser.add_argument('output_prefix', help="output prefix for generated files")
+    dist_plot_parser.add_argument('-m', '--min_children', help='minimum named child taxa to consider taxa', type=int, default=2)
+    dist_plot_parser.add_argument('-s', '--min_support', help="only decorate nodes above the specified support value", type=float, default=0)
+    dist_plot_parser.add_argument('-t', '--title', help='title of plot', default=None)
 
     # get and check options
     args = None
