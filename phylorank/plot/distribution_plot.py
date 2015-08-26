@@ -20,7 +20,7 @@ import sys
 from collections import defaultdict
 
 from phylorank.infer_rank import InferRank
-from phylorank.newick import parse_label
+from phylorank.newick import parse_label, read_from_tree
 
 from skbio import TreeNode
 
@@ -39,58 +39,41 @@ import mpld3
 
 
 class DistributionPlot(AbstractPlot):
-    """Plot distribution of groups in each taxonomic rank."""
+    """Plot distribution of taxa in each taxonomic rank."""
 
     def __init__(self):
         """Initialize."""
         AbstractPlot.__init__(self, None)
 
-    def rel_dist_to_named_clades(self, tree, start_label, taxa_to_consider, min_support):
-        """Determine relative distance to named clades.
+    def _rel_dist_to_named_clades(self, root, taxa_to_consider, min_support):
+        """Determine relative distance to specific taxa.
 
         Parameters
         ----------
-        tree : str or TreeNode
-            A newick string or a TreeNode
-        start_label : str
-            Label of node to start marking taxonomic ranks.
+        root : TreeNode
+            Root of tree.
         taxa_to_consider : set
-            Taxonomic groups to consider.
+            Named taxonomic groups to consider.
         min_support : float
             Required support to consider taxon.
 
         Returns
         -------
-        dict : d[rank_index][taxon] -> relative distance to root
+        dict : d[rank_index][taxon] -> relative divergence
         """
-
-        # make sure we have a TreeNode object
-        root = tree
-        if not isinstance(root, TreeNode):
-            root = TreeNode.read(root, convert_underscores=False)
 
         # calculate relative distance for all nodes
         infer_rank = InferRank()
         infer_rank.decorate_rel_dist(root)
 
-        # find specified starting node
-        start_node = None
-        for n in root.preorder():
-            if n.name and start_label in n.name:
-                start_node = n
-
-        if not start_node:
-            print 'Unable to locate node with label: ' + start_label
-            return None
-
         # assign internal nodes with ranks from
         rel_dists = defaultdict(dict)
-        for node in start_node.preorder(include_self=False):
+        for node in root.preorder(include_self=False):
             if not node.name or node.is_tip():
                 continue
 
             # check for support value
-            support, taxon_name = parse_label(node.name)
+            support, taxon_name, _auxiliary_info = parse_label(node.name)
 
             if not taxon_name:
                 continue
@@ -114,8 +97,16 @@ class DistributionPlot(AbstractPlot):
 
         return rel_dists
 
-    def percent_correct_plot(self, rel_dists, output_prefix):
-        """Create plots showing correctly classified taxa for different relative distance values."""
+    def _percent_correct_plot(self, rel_dists, output_prefix):
+        """Create plots showing correctly classified taxa for different relative distance values.
+
+        Parameters
+        ----------
+        rel_dists : d[rank_index][taxon] -> relative divergence
+            Relative divergence of taxa at each rank.
+        output_prefix : str
+            Prefix for plots.
+        """
 
         print ''
         print '  Relative divergence thresholds:'
@@ -187,8 +178,20 @@ class DistributionPlot(AbstractPlot):
 
         return rel_dist_thresholds
 
-    def distribution_plot(self, rel_dists, rel_dist_thresholds, title, output_prefix):
-        """Create plot showing the distribution of taxa at each taxonomic rank."""
+    def _distribution_plot(self, rel_dists, rel_dist_thresholds, distribution_table, plot_file):
+        """Create plot showing the distribution of taxa at each taxonomic rank.
+
+        Parameters
+        ----------
+        rel_dists: d[rank_index][taxon] -> relative divergence
+            Relative divergence of taxa at each rank.
+        rel_dist_thresholds: ?
+            ???
+        distribution_table : str
+            Desired name of output table with distribution information.
+        plot_file : str
+            Desired name of output plot.
+        """
 
         self.fig.clear()
         self.fig.set_size_inches(12, 4.5)
@@ -215,7 +218,7 @@ class DistributionPlot(AbstractPlot):
                 rel_dist_thresholds = [p10] + rel_dist_thresholds
 
         # create scatter plot and results table
-        fout = open(output_prefix + '.tsv', 'w')
+        fout = open(distribution_table, 'w')
         x = []
         y = []
         labels = []
@@ -237,8 +240,6 @@ class DistributionPlot(AbstractPlot):
 
         # set plot elements
         ax.grid(color=(0.8, 0.8, 0.8), linestyle='dashed')
-        if title:
-            ax.set_title(title, size=12)
 
         ax.set_xlabel('relative distance')
         ax.set_xticks(np_arange(0, 1.05, 0.1))
@@ -252,30 +253,77 @@ class DistributionPlot(AbstractPlot):
         self.prettify(ax)
 
         # plot relative divergence threshold lines
-        _y_min, y_max = ax.get_ylim()
+        y_min, y_max = ax.get_ylim()
         for threshold in rel_dist_thresholds:
-            ax.axvline(x=threshold, ymin=0, ymax=1, color='r', ls='--')
+            ax.plot((threshold, threshold), (y_min, y_max), color='r', ls='--')
             ax.text(threshold + 0.001, y_max, '%.3f' % threshold, horizontalalignment='center')
 
         # make plot interactive
         mpld3.plugins.connect(self.fig, mpld3.plugins.PointLabelTooltip(scatter, labels=labels))
         mpld3.plugins.connect(self.fig, mpld3.plugins.MousePosition(fontsize=12))
-        mpld3.save_html(self.fig, output_prefix + '.html')
+        mpld3.save_html(self.fig, plot_file[0:plot_file.rfind('.')] + '.html')
 
-        plot_file = output_prefix + '.png'
         self.fig.tight_layout(pad=1)
         self.fig.savefig(plot_file, dpi=300)
 
-        return plot_file
+    def _trusted_taxa(self, trusted_taxa_file):
+        """Read trusted taxa from file.
 
-    def run(self, input_tree, output_prefix, min_children, min_support, title):
+        Parameters
+        ----------
+        trusted_taxa_file : str
+            File specifying trusted taxa to consider. Set to None to consider all taxa.
 
-        # read taxonomy and determine children taxa for each named group
-        taxonomy = Taxonomy().read_from_tree(input_tree)
-        taxon_children = Taxonomy().taxon_children(taxonomy)
+        Returns
+        -------
+        set
+            Trusted taxa.
+        """
+
+        trusted_taxa = set()
+        for line in open(trusted_taxa_file):
+            trusted_taxa.add(line.strip())
+
+        return trusted_taxa
+
+    def run(self, input_tree, output_prefix, trusted_taxa_file, min_children, min_support):
+        """Determine distribution of taxa at each taxonomic rank.
+
+        Parameters
+        ----------
+        input_tree : str
+            Name of input tree.
+        output_prefix : str
+            Desired prefix for generated files.
+        trusted_taxa_file : str
+            File specifying trusted taxa to consider. Set to None to consider all taxa.
+        min_children : int
+            Only consider taxa with at least the specified number of children taxa.
+        min_support : float
+            Only consider taxa with at least this level of support.
+        """
 
         # read tree
         tree = TreeNode.read(input_tree, convert_underscores=False)
+
+        # read trusted taxa
+        trusted_taxa = None
+        if trusted_taxa_file:
+            trusted_taxa = self._trusted_taxa(trusted_taxa_file)
+
+        # read taxonomy and determine children taxa for each named group
+        taxonomy = Taxonomy()
+        t = read_from_tree(tree)
+        taxon_children = taxonomy.taxon_children(t)
+
+        # sanity check species names as these are a common problem
+        for taxon_id, taxa in t.iteritems():
+            if len(taxa) > Taxonomy.rank_index['s__']:
+                species_name = taxa[Taxonomy.rank_index['s__']]
+                valid, error_msg = taxonomy.validate_species_name(species_name, require_full=True, require_prefix=True)
+                if not valid:
+                    print '[Error] Species name %s for %s is invalid: %s' % (species_name, taxon_id, error_msg)
+                    sys.exit(-1)
 
         # determine taxa with at least the specified number of children
         taxa_to_consider = set()
@@ -283,11 +331,12 @@ class DistributionPlot(AbstractPlot):
             if len(children_taxa) >= min_children:
                 taxa_to_consider.add(taxon)
 
-            if 's__' in taxon:
-                taxa_to_consider.add(taxon)
+        # restrict taxa to the trusted set
+        if trusted_taxa:
+            taxa_to_consider = trusted_taxa.intersection(taxa_to_consider)
 
         # calculate relative distance to taxa
-        rel_dists = self.rel_dist_to_named_clades(tree, 'd__Bacteria', taxa_to_consider, min_support)
+        rel_dists = self._rel_dist_to_named_clades(tree, taxa_to_consider, min_support)
 
         # report number of taxa at each rank
         print ''
@@ -296,9 +345,9 @@ class DistributionPlot(AbstractPlot):
             print '    %s\t%d' % (Taxonomy.rank_labels[rank], len(taxa))
 
         # create performance plots
-        rel_dist_thresholds = self.percent_correct_plot(rel_dists, output_prefix)
+        rel_dist_thresholds = self._percent_correct_plot(rel_dists, output_prefix)
 
         # create distribution plot
-        plot_file = self.distribution_plot(rel_dists, rel_dist_thresholds, title, output_prefix)
-
-        return plot_file
+        distribution_table = output_prefix + '.tsv'
+        plot_file = output_prefix + '.png'
+        self._distribution_plot(rel_dists, rel_dist_thresholds, distribution_table, plot_file)

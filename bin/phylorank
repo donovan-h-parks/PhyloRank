@@ -32,6 +32,9 @@ import argparse
 from phylorank.main import OptionsParser
 from biolib.misc.custom_help_formatter import CustomHelpFormatter
 
+# import warnings
+# warnings.filterwarnings('error')
+
 
 def version():
     """Read program version from file."""
@@ -47,8 +50,8 @@ def print_help():
     print '                ...::: PhyloRank v' + version() + ' :::...'''
     print '''\
 
-  decorate    -> Decorate nodes with inferred taxonomic ranks.
-  dist_plot   -> Plot distribution of groups in each taxonomic rank.
+  dist_plot   -> Plot distribution of taxa in each taxonomic rank.
+  decorate    -> Decorate nodes with distribution information and predicted taxonomic ranks.
 
   pull        -> Pull taxonomy information from tree.
   validate    -> Validate consistency of taxonomy.
@@ -73,10 +76,24 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(add_help=False)
     subparsers = parser.add_subparsers(help="--", dest='subparser_name')
 
+    # plot distribution of groups in each taxonomic rank
+    dist_plot_parser = subparsers.add_parser('dist_plot',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Plot distribution of taxa in each taxonomic rank')
+
+    dist_plot_parser.add_argument('input_tree', help="tree with taxa for inferring relative divergence distributions")
+    dist_plot_parser.add_argument('output_prefix', help="output prefix for generated files")
+    dist_plot_parser.add_argument('-t', '--trusted_taxa_file', help="file indicating trusted taxa to use for inferring distribution", default=None)
+    dist_plot_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa', type=int, default=2)
+    dist_plot_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa", type=float, default=0.0)
+
     # decorate nodes with inferred taxonomic ranks
+
+    # ******** MAYBE THIS SHOULD JUST TAKE A 'DISTRIBUTIONS FILE' produce by 'dist_plot'
+    #************************************************************************************
     decorate_parser = subparsers.add_parser('decorate',
                                             formatter_class=CustomHelpFormatter,
-                                            description='Decorate nodes with inferred taxonomic ranks')
+                                            description='Decorate nodes with distribution information and predicted taxonomic ranks.')
 
     decorate_parser.add_argument('input_tree', help="input tree to decorate")
     decorate_parser.add_argument('output_tree', help="output tree with assigned taxonomic ranks")
@@ -85,6 +102,9 @@ if __name__ == '__main__':
     decorate_parser.add_argument('-s', '--min_support', help="only decorate nodes above the specified support value", type=float, default=0)
     decorate_parser.add_argument('-n', '--only_named_clades', help="only decorate nodes with an existing label", action='store_true')
     decorate_parser.add_argument('-l', '--min_length', help="only decorate nodes with a parent branch above the specified length", type=float, default=0.0)
+    decorate_parser.add_argument('--no_percentile', action="store_true", help="do not decorate with percentile information")
+    decorate_parser.add_argument('--no_relative_divergence', action="store_true", help="do not decorate with relative divergence information")
+    decorate_parser.add_argument('--no_prediction', action="store_true", help="do not decorate with predicted rank information")
 
     # pull taxonomy strings from tree
     pull_parser = subparsers.add_parser('pull',
@@ -136,17 +156,6 @@ if __name__ == '__main__':
     robustness_plot_parser.add_argument('output_prefix', help="output prefix for generated files")
     robustness_plot_parser.add_argument('-m', '--min_children', help='minimum named child taxa to consider taxa', type=int, default=2)
     robustness_plot_parser.add_argument('-t', '--title', help='title of plot', default=None)
-
-    # plot distribution of groups in each taxonomic rank
-    dist_plot_parser = subparsers.add_parser('dist_plot',
-                                            formatter_class=CustomHelpFormatter,
-                                            description='Plot distribution of groups in each taxonomic rank')
-
-    dist_plot_parser.add_argument('input_tree', help="directory containing trees to inferred relative distance across")
-    dist_plot_parser.add_argument('output_prefix', help="output prefix for generated files")
-    dist_plot_parser.add_argument('-m', '--min_children', help='minimum named child taxa to consider taxa', type=int, default=2)
-    dist_plot_parser.add_argument('-s', '--min_support', help="only decorate nodes above the specified support value", type=float, default=0)
-    dist_plot_parser.add_argument('-t', '--title', help='title of plot', default=None)
 
     # get and check options
     args = None

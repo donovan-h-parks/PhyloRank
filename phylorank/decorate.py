@@ -25,6 +25,13 @@ from phylorank.newick import parse_label
 from skbio import TreeNode
 
 
+'''
+To do:
+  - should produce a flat file indicating existing taxa labels,
+    predicted taxa labels, relative divergence, and percentiles.
+'''
+
+
 class Decorate():
     """Decorate nodes with taxonomic ranks inferred from evolutionary divergence."""
 
@@ -36,7 +43,15 @@ class Decorate():
         self.rank_designators = ['d', 'p', 'c', 'o', 'f', 'g', 's', 'st']
         self.highly_basal_designator = 'X__'
 
-    def run(self, input_tree, output_tree, min_support, only_named_clades, min_length, thresholds):
+    def run(self, input_tree,
+                    output_tree,
+                    min_support,
+                    only_named_clades,
+                    min_length,
+                    show_percentiles,
+                    show_relative_divergence,
+                    show_prediction,
+                    thresholds):
         """Read distribution file.
 
         Parameters
@@ -51,6 +66,12 @@ class Decorate():
             Only decorate nodes with existing labels.
         min_length : float
             Only decorate nodes above specified length.
+        show_percentiles : bool
+            Flag indicating if percentiles should be placed on nodes.
+        show_relative_divergence : bool
+            Flag indicating if relative divergences should be placed on nodes.
+        show_prediction : bool
+            Flag indicating if predicate ranks should be placed on nodes.
         thresholds : d[rank] -> threshold
             Relative divergence threshold for defining taxonomic ranks.
         """
@@ -70,6 +91,9 @@ class Decorate():
 
         correct = defaultdict(int)
         incorrect = defaultdict(int)
+
+        fout = open(output_tree + '.info', 'w')
+        fout.write('Taxon name\tPredicted rank\tRelative divergence\tCurrent rank percentile\tPredicted rank percentile\n')
         for n in root.preorder():
             if n.is_tip():
                 continue
@@ -78,7 +102,7 @@ class Decorate():
                 continue
 
             # parse taxon name and support value from node label
-            support, taxon_name = parse_label(n.name)
+            support, taxon_name, _auxiliary_info = parse_label(n.name)
 
             if support and float(support) < min_support:
                 continue
@@ -105,8 +129,12 @@ class Decorate():
                         predicted_rank = self.rank_prefixes[i + 1]
                         break
 
-            n.name += '|' + predicted_rank + '[%.2f]' % n.rel_dist
-            if predicted_rank != self.highly_basal_designator:
+            if show_prediction:
+                n.name += '|' + predicted_rank
+                if show_relative_divergence:
+                    n.name += '[rd=%.2f]' % n.rel_dist
+
+            if taxon_name and predicted_rank != self.highly_basal_designator:
                 # tabulate number of correct and incorrect predictions
                 named_rank = taxon_name.split(';')[-1][0:3]
                 if named_rank == predicted_rank.lower():
@@ -114,11 +142,14 @@ class Decorate():
                 else:
                     incorrect[named_rank] += 1
 
+            if taxon_name:
+                fout.write('%s\t%s\t%.3f\n' % (taxon_name, predicted_rank, n.rel_dist))
+
+        fout.close()
+        root.write(output_tree)
+
         for rank_prefix in self.rank_prefixes[1:7]:
             correct_taxa = correct[rank_prefix.lower()]
             incorrect_taxa = incorrect[rank_prefix.lower()]
             total_taxa = correct_taxa + incorrect_taxa
             self.logger.info('  %s\t%d of %d (%.2f%%)' % (rank_prefix, correct_taxa, total_taxa, correct_taxa * 100.0 / total_taxa))
-
-        # save decorated tree
-        root.write(output_tree)

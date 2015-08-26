@@ -20,6 +20,7 @@ import sys
 import logging
 
 from phylorank.decorate import Decorate
+from phylorank.newick import read_from_tree
 from phylorank.plot.robustness_plot import RobustnessPlot
 from phylorank.plot.distribution_plot import DistributionPlot
 
@@ -39,11 +40,32 @@ class OptionsParser():
         self.logger = logging.getLogger()
         self.time_keeper = TimeKeeper()
 
+    def dist_plot(self, options):
+        """Distribution plot command"""
+        self.logger.info('')
+        self.logger.info('*******************************************************************************')
+        self.logger.info(' [PhyloRank - dist_plot] Plotting distribution of each taxonomic rank.')
+        self.logger.info('*******************************************************************************')
+
+        check_file_exists(options.input_tree)
+
+        if options.trusted_taxa_file:
+            check_file_exists(options.trusted_taxa_file)
+
+        dist_plot = DistributionPlot()
+        dist_plot.run(options.input_tree,
+                            options.output_prefix,
+                            options.trusted_taxa_file,
+                            options.min_children,
+                            options.min_support)
+
+        self.time_keeper.print_time_stamp()
+
     def decorate(self, options):
         """Decorate command"""
         self.logger.info('')
         self.logger.info('*******************************************************************************')
-        self.logger.info(' [PhyloRank - decorate] Decorating nodes with inferred taxonomic ranks.')
+        self.logger.info(' [PhyloRank - decorate] Decorating nodes with distribution and rank info.')
         self.logger.info('*******************************************************************************')
 
         check_file_exists(options.input_tree)
@@ -54,6 +76,9 @@ class OptionsParser():
                         options.min_support,
                         options.only_named_clades,
                         options.min_length,
+                        not options.no_percentile,
+                        not options.no_relative_divergence,
+                        not options.no_prediction,
                         options.thresholds)
 
         self.logger.info('')
@@ -70,14 +95,12 @@ class OptionsParser():
 
         check_file_exists(options.input_tree)
 
-        taxonomy = Taxonomy()
-        t = taxonomy.read_from_tree(options.input_tree)
-
+        t = read_from_tree(options.input_tree)
         if not options.no_rank_fill:
             for taxon_id, taxa in t.iteritems():
-                t[taxon_id] = taxonomy.fill_missing_ranks(taxa)
+                t[taxon_id] = Taxonomy().fill_missing_ranks(taxa)
 
-        taxonomy.write(t, options.output_file)
+        Taxonomy().write(t, options.output_file)
 
         self.logger.info('')
         self.logger.info('  Taxonomy strings written to: %s' % options.output_file)
@@ -96,20 +119,23 @@ class OptionsParser():
         taxonomy = Taxonomy()
         t = taxonomy.read(options.taxonomy_file)
 
-        invalid_ranks, invalid_prefixes, invalid_hierarchies = taxonomy.validate(t,
-                                                                                 not options.no_prefix,
-                                                                                 not options.no_all_ranks,
-                                                                                 not options.no_hierarhcy,
-                                                                                 not options.no_species,
-                                                                                 True)
+        errors = taxonomy.validate(t,
+                                     not options.no_prefix,
+                                     not options.no_all_ranks,
+                                     not options.no_hierarhcy,
+                                     not options.no_species,
+                                     True)
+
+        invalid_ranks, invalid_prefixes, invalid_species_name, invalid_hierarchies = errors
 
         self.logger.info('')
-        if len(invalid_ranks) == 0 and len(invalid_prefixes) == 0 and len(invalid_hierarchies) == 0:
+        if sum([len(e) for e in errors]) == 0:
             self.logger.info('  No errors identified in taxonomy file.')
         else:
             self.logger.info('  Identified %d incomplete taxonomy strings.' % len(invalid_ranks))
             self.logger.info('  Identified %d rank prefix errors.' % len(invalid_prefixes))
-            self.logger.info('  Identified %d errors in the hierarchy.' % len(invalid_hierarchies))
+            self.logger.info('  Identified %d invalid species names.' % len(invalid_species_name))
+            self.logger.info('  Identified %d taxa with multiple parents.' % len(invalid_hierarchies))
 
         self.time_keeper.print_time_stamp()
 
@@ -205,25 +231,6 @@ class OptionsParser():
                                 options.output_prefix,
                                 options.min_children,
                                 options.title)
-
-        self.time_keeper.print_time_stamp()
-
-    def dist_plot(self, options):
-        """Distribution plot command"""
-        self.logger.info('')
-        self.logger.info('*******************************************************************************')
-        self.logger.info(' [PhyloRank - dist_plot] Plotting distribution of each taxonomic rank.')
-        self.logger.info('*******************************************************************************')
-
-        dist_plot = DistributionPlot()
-        plot_file = dist_plot.run(options.input_tree,
-                                    options.output_prefix,
-                                    options.min_children,
-                                    options.min_support,
-                                    options.title)
-
-        self.logger.info('')
-        self.logger.info('  Distribution plot written to: %s' % plot_file)
 
         self.time_keeper.print_time_stamp()
 
