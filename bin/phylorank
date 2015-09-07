@@ -83,9 +83,10 @@ if __name__ == '__main__':
 
     dist_plot_parser.add_argument('input_tree', help="tree with taxa for inferring relative divergence distributions")
     dist_plot_parser.add_argument('output_prefix', help="output prefix for generated files")
-    dist_plot_parser.add_argument('-t', '--trusted_taxa_file', help="file indicating trusted taxa to use for inferring distribution", default=None)
-    dist_plot_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa', type=int, default=2)
-    dist_plot_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa", type=float, default=0.0)
+    dist_plot_parser.add_argument('-p', '--plot_taxa_file', help="file indicating taxa to plot (default = all taxa)", default=None)
+    dist_plot_parser.add_argument('-t', '--trusted_taxa_file', help="file indicating trusted taxa to use for inferring distribution (default = all taxa)", default=None)
+    dist_plot_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa when inferring distribution', type=int, default=2)
+    dist_plot_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa when inferring distribution", type=float, default=0.0)
 
     # decorate nodes with inferred taxonomic ranks
 

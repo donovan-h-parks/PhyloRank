@@ -131,6 +131,13 @@ class InferRank():
                 a = node.length
                 b = node.weighted_dist
                 x = node.parent.rel_dist
-                rel_dist = x + (a / (a + b)) * (1.0 - x)
+
+                if (a + b) != 0:
+                    rel_dist = x + (a / (a + b)) * (1.0 - x)
+                else:
+                    # internal node has zero length to parent,
+                    # so should have the same relative distance
+                    # as the parent node
+                    rel_dist = x
 
                 node.rel_dist = rel_dist

@@ -49,12 +49,16 @@ class OptionsParser():
 
         check_file_exists(options.input_tree)
 
+        if options.plot_taxa_file:
+            check_file_exists(options.plot_taxa_file)
+
         if options.trusted_taxa_file:
             check_file_exists(options.trusted_taxa_file)
 
         dist_plot = DistributionPlot()
         dist_plot.run(options.input_tree,
                             options.output_prefix,
+                            options.plot_taxa_file,
                             options.trusted_taxa_file,
                             options.min_children,
                             options.min_support)

@@ -45,7 +45,7 @@ class DistributionPlot(AbstractPlot):
         """Initialize."""
         AbstractPlot.__init__(self, None)
 
-    def _rel_dist_to_named_clades(self, root, taxa_to_consider, min_support):
+    def _rel_dist_to_named_clades(self, root, taxa_to_consider):
         """Determine relative distance to specific taxa.
 
         Parameters
@@ -54,8 +54,6 @@ class DistributionPlot(AbstractPlot):
             Root of tree.
         taxa_to_consider : set
             Named taxonomic groups to consider.
-        min_support : float
-            Required support to consider taxon.
 
         Returns
         -------
@@ -73,16 +71,9 @@ class DistributionPlot(AbstractPlot):
                 continue
 
             # check for support value
-            support, taxon_name, _auxiliary_info = parse_label(node.name)
+            _support, taxon_name, _auxiliary_info = parse_label(node.name)
 
             if not taxon_name:
-                continue
-
-            if support and float(support) < min_support:
-                continue
-            elif not support and min_support > 0:
-                # no support value, so inform user if they were trying to filter on this property
-                print '[Error] Tree does not contain support values. As such, --min_support must be set to 0.'
                 continue
 
             # get most-specific rank if a node represents multiple ranks
@@ -97,19 +88,21 @@ class DistributionPlot(AbstractPlot):
 
         return rel_dists
 
-    def _percent_correct_plot(self, rel_dists, output_prefix):
+    def _percent_correct_plot(self, rel_dists, taxa_for_dist_inference, output_prefix):
         """Create plots showing correctly classified taxa for different relative distance values.
 
         Parameters
         ----------
         rel_dists : d[rank_index][taxon] -> relative divergence
             Relative divergence of taxa at each rank.
+        taxa_for_dist_inference : iterable
+            Taxa to consider when inferring relative divergence thresholds.
         output_prefix : str
             Prefix for plots.
         """
 
         print ''
-        print '  Relative divergence thresholds:'
+        print '  Relative divergence thresholds (rank, threshold, parent taxa, child taxa):'
 
         ranks = sorted(rel_dists.keys())
         rel_dist_thresholds = []
@@ -119,10 +112,16 @@ class DistributionPlot(AbstractPlot):
 
             # determine classification results for relative divergence
             # values between the medians of adjacent taxonomic ranks
-            parent_rds = rel_dists[parent_rank].values()
+            parent_rds = []
+            for taxa, rd in rel_dists[parent_rank].iteritems():
+                if taxa in taxa_for_dist_inference:
+                    parent_rds.append(rd)
             parent_p50 = np_percentile(parent_rds, 50)
 
-            child_rds = rel_dists[child_rank].values()
+            child_rds = []
+            for taxa, rd in rel_dists[child_rank].iteritems():
+                if taxa in taxa_for_dist_inference:
+                    child_rds.append(rd)
             child_p50 = np_percentile(child_rds, 50)
 
             r = []
@@ -154,7 +153,7 @@ class DistributionPlot(AbstractPlot):
             max_mean = max(y_mean_corr)
             r_max_values = [r[i] for i, rd in enumerate(y_mean_corr) if rd == max_mean]
             r_max_value = np_mean(r_max_values)  # Note: this will fail if there are multiple local maxima
-            print '    %s\t%.3f' % (Taxonomy.rank_labels[parent_rank], r_max_value)
+            print '    %s\t%.3f\t%d\t%d' % (Taxonomy.rank_labels[parent_rank], r_max_value, len(parent_rds), len(child_rds))
 
             # check that there is a single local maximum
             rd_indices = [i for i, rd in enumerate(y_mean_corr) if rd == max_mean]
@@ -266,55 +265,51 @@ class DistributionPlot(AbstractPlot):
         self.fig.tight_layout(pad=1)
         self.fig.savefig(plot_file, dpi=300)
 
-    def _trusted_taxa(self, trusted_taxa_file):
-        """Read trusted taxa from file.
+    def _read_taxa_file(self, taxa_file):
+        """Read taxa from file.
 
         Parameters
         ----------
-        trusted_taxa_file : str
-            File specifying trusted taxa to consider. Set to None to consider all taxa.
+        taxa_file : str
+            File specifying taxa to consider. One per line.
 
         Returns
         -------
         set
-            Trusted taxa.
+            Taxa.
         """
 
-        trusted_taxa = set()
-        for line in open(trusted_taxa_file):
-            trusted_taxa.add(line.strip())
+        taxa = set()
+        for line in open(taxa_file):
+            taxa.add(line.strip())
 
-        return trusted_taxa
+        return taxa
 
-    def run(self, input_tree, output_prefix, trusted_taxa_file, min_children, min_support):
-        """Determine distribution of taxa at each taxonomic rank.
+    def _taxa_for_dist_inference(self, tree, trusted_taxa, min_children, min_support):
+        """Determine taxa to use for inferring distribution of relative divergences.
 
         Parameters
         ----------
-        input_tree : str
-            Name of input tree.
-        output_prefix : str
-            Desired prefix for generated files.
-        trusted_taxa_file : str
-            File specifying trusted taxa to consider. Set to None to consider all taxa.
+        tree : TreeNode
+            Phylogenetic tree.
+        trusted_taxa : iterable
+            Trusted taxa to consider when inferring distribution.
         min_children : int
-            Only consider taxa with at least the specified number of children taxa.
+            Only consider taxa with at least the specified number of children taxa when inferring distribution.
         min_support : float
-            Only consider taxa with at least this level of support.
+            Only consider taxa with at least this level of support when inferring distribution.
         """
-
-        # read tree
-        tree = TreeNode.read(input_tree, convert_underscores=False)
-
-        # read trusted taxa
-        trusted_taxa = None
-        if trusted_taxa_file:
-            trusted_taxa = self._trusted_taxa(trusted_taxa_file)
 
         # read taxonomy and determine children taxa for each named group
         taxonomy = Taxonomy()
         t = read_from_tree(tree)
         taxon_children = taxonomy.taxon_children(t)
+
+        # get all named groups
+        taxa_for_dist_inference = set()
+        for taxon_id, taxa in t.iteritems():
+            for taxon in taxa:
+                taxa_for_dist_inference.add(taxon)
 
         # sanity check species names as these are a common problem
         for taxon_id, taxa in t.iteritems():
@@ -325,27 +320,89 @@ class DistributionPlot(AbstractPlot):
                     print '[Error] Species name %s for %s is invalid: %s' % (species_name, taxon_id, error_msg)
                     sys.exit(-1)
 
-        # determine taxa with at least the specified number of children
-        taxa_to_consider = set()
-        for taxon, children_taxa in taxon_children.iteritems():
-            if len(children_taxa) >= min_children:
-                taxa_to_consider.add(taxon)
+        # restrict taxa to those with a sufficient number of named children
+        # Note: a taxonomic group with no children will not end up in the
+        # taxon_children data structure so care must be taken when applying
+        # this filtering criteria.
+        if min_children > 0:
+            valid_taxa = set()
+            for taxon, children_taxa in taxon_children.iteritems():
+                if len(children_taxa) >= min_children:
+                    valid_taxa.add(taxon)
 
-        # restrict taxa to the trusted set
+            taxa_for_dist_inference.intersection_update(valid_taxa)
+
+        # restrict taxa used for inferring distribution to those with sufficient support
+        if min_support > 0:
+            for node in tree.preorder(include_self=False):
+                if not node.name or node.is_tip():
+                    continue
+
+                # check for support value
+                support, taxon_name, _auxiliary_info = parse_label(node.name)
+
+                if not taxon_name:
+                    continue
+
+                if support and float(support) < min_support:
+                    taxa_for_dist_inference.difference_update([taxon_name])
+                elif not support and min_support > 0:
+                    # no support value, so inform user if they were trying to filter on this property
+                    print '[Error] Tree does not contain support values. As such, --min_support should be set to 0.'
+                    continue
+
+        # restrict taxa used for inferring distribution to the trusted set
         if trusted_taxa:
-            taxa_to_consider = trusted_taxa.intersection(taxa_to_consider)
+            taxa_for_dist_inference = trusted_taxa.intersection(taxa_for_dist_inference)
+
+        return taxa_for_dist_inference
+
+    def run(self, input_tree, output_prefix, plot_taxa_file, trusted_taxa_file, min_children, min_support):
+        """Determine distribution of taxa at each taxonomic rank.
+
+        Parameters
+        ----------
+        input_tree : str
+            Name of input tree.
+        output_prefix : str
+            Desired prefix for generated files.
+        plot_taxa_file : str
+            File specifying taxa to plot. Set to None to consider all taxa.
+        trusted_taxa_file : str
+            File specifying trusted taxa to consider when inferring distribution. Set to None to consider all taxa.
+        min_children : int
+            Only consider taxa with at least the specified number of children taxa when inferring distribution.
+        min_support : float
+            Only consider taxa with at least this level of support when inferring distribution.
+        """
+
+        # read tree
+        tree = TreeNode.read(input_tree, convert_underscores=False)
+
+        # read taxa to plot
+        taxa_to_plot = None
+        if plot_taxa_file:
+            taxa_to_plot = self._read_taxa_file(plot_taxa_file)
+
+        # read trusted taxa
+        trusted_taxa = None
+        if trusted_taxa_file:
+            trusted_taxa = self._read_taxa_file(trusted_taxa_file)
+
+        # determine taxa to be used for inferring distribution
+        taxa_for_dist_inference = self._taxa_for_dist_inference(tree, trusted_taxa, min_children, min_support)
 
         # calculate relative distance to taxa
-        rel_dists = self._rel_dist_to_named_clades(tree, taxa_to_consider, min_support)
+        rel_dists = self._rel_dist_to_named_clades(tree, taxa_to_plot)
 
         # report number of taxa at each rank
         print ''
-        print '  Number of taxa considered at each taxonomic rank:'
+        print '  Number of taxa plotted at each taxonomic rank:'
         for rank, taxa in rel_dists.iteritems():
             print '    %s\t%d' % (Taxonomy.rank_labels[rank], len(taxa))
 
         # create performance plots
-        rel_dist_thresholds = self._percent_correct_plot(rel_dists, output_prefix)
+        rel_dist_thresholds = self._percent_correct_plot(rel_dists, taxa_for_dist_inference, output_prefix)
 
         # create distribution plot
         distribution_table = output_prefix + '.tsv'
