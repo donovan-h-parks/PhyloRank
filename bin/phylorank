@@ -27,10 +27,13 @@ __status__ = "Development"
 import os
 import sys
 import json
+import ntpath
+import logging
 import argparse
 
 from phylorank.main import OptionsParser
 from biolib.misc.custom_help_formatter import CustomHelpFormatter
+from biolib.common import make_sure_path_exists
 
 # import warnings
 # warnings.filterwarnings('error')
@@ -50,13 +53,14 @@ def print_help():
     print '                ...::: PhyloRank v' + version() + ' :::...'''
     print '''\
 
-  dist_plot   -> Plot distribution of taxa in each taxonomic rank.
-  decorate    -> Decorate nodes with distribution information and predicted taxonomic ranks.
+  outliers    -> Create table and plot useful for identifying taxonomic outliers
+  dist_plot   -> Plot distribution of taxa in each taxonomic rank
+  decorate    -> Decorate nodes with distribution information and predicted taxonomic ranks
 
-  pull        -> Pull taxonomy information from tree.
-  validate    -> Validate consistency of taxonomy.
-  append      -> Append taxonomy to extant tree labels.
-  taxon_stats -> Summary statistics of taxonomic groups.
+  pull        -> Pull taxonomy information from tree
+  validate    -> Validate consistency of taxonomy
+  append      -> Append taxonomy to extant tree labels
+  taxon_stats -> Summary statistics of taxonomic groups
 
 
   [Expert commands: hide these at some point]
@@ -70,23 +74,70 @@ def print_help():
     or posted on GitHub (https://github.com/dparks1134/autorank).
     '''
 
+def logger_setup(log_file, silent):
+    """Set logging for application.
+
+    Parameters
+    ----------
+    log_file : str
+        Name of log file.
+    silent : boolean
+        Flag indicating if output to stdout should be suppressed.
+    """
+
+    print 'log_file', log_file
+
+    # setup general properties of logger
+    logger = logging.getLogger('')
+    logger.setLevel(logging.DEBUG)
+    log_format = logging.Formatter(fmt="[%(asctime)s] %(levelname)s: %(message)s",
+                                   datefmt="%Y-%m-%d %H:%M:%S")
+
+    # setup logging to console
+    if not silent:
+        stream_logger = logging.StreamHandler(sys.stdout)
+        stream_logger.setFormatter(log_format)
+        stream_logger.setLevel(logging.DEBUG)
+        logger.addHandler(stream_logger)
+
+    if log_file:
+        file_logger = logging.FileHandler(log_file, 'a')
+        file_logger.setFormatter(log_format)
+        logger.addHandler(file_logger)
+
+    logger.info('PhyloRank v%s' % version())
+    logger.info(ntpath.basename(sys.argv[0]) + ' ' + ' '.join(sys.argv[1:]))
+
+
 if __name__ == '__main__':
 
     # initialize the options parser
     parser = argparse.ArgumentParser(add_help=False)
     subparsers = parser.add_subparsers(help="--", dest='subparser_name')
 
+    # create table and plot useful for identifying taxonomic outliers.
+    outliers_parser = subparsers.add_parser('outliers',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Create information for identifying taxnomic outliers')
+
+    outliers_parser.add_argument('input_tree', help="decorated tree for inferring relative divergence outliers")
+    outliers_parser.add_argument('output_dir', help="desired output directory for generated files")
+    outliers_parser.add_argument('-p', '--plot_taxa_file', help="file indicating taxonomic groups to plot (default: all taxa)", default=None)
+    outliers_parser.add_argument('-t', '--trusted_taxa_file', help="file indicating trusted taxonomic groups to use for inferring distribution (default: all taxa)", default=None)
+    outliers_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa when inferring distribution (default: 0)', type=int, default=0)
+    outliers_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa when inferring distribution (default: 0)", type=float, default=0.0)
+
     # plot distribution of groups in each taxonomic rank
     dist_plot_parser = subparsers.add_parser('dist_plot',
                                             formatter_class=CustomHelpFormatter,
                                             description='Plot distribution of taxa in each taxonomic rank')
 
-    dist_plot_parser.add_argument('input_tree', help="tree with taxa for inferring relative divergence distributions")
+    dist_plot_parser.add_argument('input_tree', help="decorated tree for establishing relative divergence distributions")
     dist_plot_parser.add_argument('output_prefix', help="output prefix for generated files")
-    dist_plot_parser.add_argument('-p', '--plot_taxa_file', help="file indicating taxa to plot (default = all taxa)", default=None)
-    dist_plot_parser.add_argument('-t', '--trusted_taxa_file', help="file indicating trusted taxa to use for inferring distribution (default = all taxa)", default=None)
-    dist_plot_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa when inferring distribution', type=int, default=2)
-    dist_plot_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa when inferring distribution", type=float, default=0.0)
+    dist_plot_parser.add_argument('-p', '--plot_taxa_file', help="file indicating taxonomic groups to plot (default: all taxa)", default=None)
+    dist_plot_parser.add_argument('-t', '--trusted_taxa_file', help="file indicating trusted taxonomic groups to use for inferring distribution (default: all taxa)", default=None)
+    dist_plot_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa when inferring distribution  (default: 0)', type=int, default=0)
+    dist_plot_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa when inferring distribution (default: 0)", type=float, default=0.0)
 
     # decorate nodes with inferred taxonomic ranks
 
@@ -165,6 +216,14 @@ if __name__ == '__main__':
         sys.exit(0)
     else:
         args = parser.parse_args()
+
+    if hasattr(args, 'output_prefix'):
+        output_dir, output_prefix = os.path.split(args.output_prefix)
+        if output_dir:
+            make_sure_path_exists(output_dir)
+        logger_setup(os.path.join(output_dir, 'phylorank.log'), False)
+    else:
+        logger_setup('phylorank.log', False)
 
     # do what we came here to do
     try:

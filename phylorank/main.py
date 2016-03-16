@@ -21,6 +21,7 @@ import logging
 
 from phylorank.decorate import Decorate
 from phylorank.newick import read_from_tree
+from phylorank.outliers import Outliers
 from phylorank.plot.robustness_plot import RobustnessPlot
 from phylorank.plot.distribution_plot import DistributionPlot
 
@@ -40,12 +41,32 @@ class OptionsParser():
         self.logger = logging.getLogger()
         self.time_keeper = TimeKeeper()
 
+    def outliers(self, options):
+        """Create information for identifying taxnomic outliers"""
+
+        check_file_exists(options.input_tree)
+
+        if options.plot_taxa_file:
+            check_file_exists(options.plot_taxa_file)
+
+        if options.trusted_taxa_file:
+            check_file_exists(options.trusted_taxa_file)
+
+        if not os.path.exists(options.output_dir):
+            os.makedirs(options.output_dir)
+
+        o = Outliers()
+        o.run(options.input_tree,
+                options.output_dir,
+                options.plot_taxa_file,
+                options.trusted_taxa_file,
+                options.min_children,
+                options.min_support)
+
+        self.logger.info('Done.')
+
     def dist_plot(self, options):
         """Distribution plot command"""
-        self.logger.info('')
-        self.logger.info('*******************************************************************************')
-        self.logger.info(' [PhyloRank - dist_plot] Plotting distribution of each taxonomic rank.')
-        self.logger.info('*******************************************************************************')
 
         check_file_exists(options.input_tree)
 
@@ -63,7 +84,7 @@ class OptionsParser():
                             options.min_children,
                             options.min_support)
 
-        self.time_keeper.print_time_stamp()
+        self.logger.info('Done.')
 
     def decorate(self, options):
         """Decorate command"""
@@ -245,7 +266,9 @@ class OptionsParser():
 
         # check_dependencies(('diamond', 'ktImportText'))
 
-        if(options.subparser_name == 'decorate'):
+        if(options.subparser_name == 'outliers'):
+            self.outliers(options)
+        elif(options.subparser_name == 'decorate'):
             self.decorate(options)
         elif(options.subparser_name == 'pull'):
             self.pull(options)
