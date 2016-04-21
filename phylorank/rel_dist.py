@@ -15,55 +15,180 @@
 #                                                                             #
 ###############################################################################
 
+import os
+import sys
+import logging
 from collections import defaultdict
 
-from phylorank.infer_rank import InferRank
 from phylorank.newick import parse_label, read_from_tree
 
 from biolib.taxonomy import Taxonomy
 
 from skbio import TreeNode
 
+from numpy import (mean as np_mean,
+                   std as np_std,
+                   arange as np_arange,
+                   percentile as np_percentile)
 
-def rel_dist_to_named_clades(root, taxa_to_consider):
-    """Determine relative distance to specific taxa.
+                   
+class RelativeDistance():
+    """Determine relative rates of evolutionary divergence."""
 
-    Parameters
-    ----------
-    root : TreeNode
-        Root of tree.
-    taxa_to_consider : set
-        Named taxonomic groups to consider.
+    def __init__(self):
+        """Initialization."""
+        self.logger = logging.getLogger()
 
-    Returns
-    -------
-    dict : d[rank_index][taxon] -> relative divergence
-    """
+        # branch length used to define an OTU
+        self.otu_branch_length = 0.01
 
-    # calculate relative distance for all nodes
-    infer_rank = InferRank()
-    infer_rank.decorate_rel_dist(root)
+    def _avg_descendant_rate(self, tree):
+        """Calculate average rate of divergence for each nodes in a tree.
 
-    # assign internal nodes with ranks from
-    rel_dists = defaultdict(dict)
-    for node in root.preorder(include_self=False):
-        if not node.name or node.is_tip():
-            continue
+        The average rate is weighted by the number of OTUs in each child
+        lineage. A node is classified as an OTU if it is the most proximal
+        node in a lineage where the sum of the distal branch length and
+        average branch length to extant organisms is greater than a
+        defined threshold. For OTUs and nodes more proximal than the
+        defined OTU, the average rate is the arithmetic average of the
+        branch length to all descendant taxa.
 
-        # check for support value
-        _support, taxon_name, _auxiliary_info = parse_label(node.name)
+        Parameters
+        ----------
+        tree : TreeNode
+            Root node of (sub)tree.
 
-        if not taxon_name:
-            continue
+        Returns
+        -------
+        The following attributes are added to each node:
+          mean_dist: mean distance to tips
+          num_otus: number of OTUs descendant from node
+          weighted_dist: OTU-weighted average distance
+        """
 
-        # get most-specific rank if a node represents multiple ranks
-        if ';' in taxon_name:
-            taxon_name = taxon_name.split(';')[-1].strip()
+        # calculate the mean branch length to extant taxa
+        for node in tree.postorder():
+            avg_div = 0
+            if not node.is_tip():
+                total_tips = len(list(node.tips()))
+                for c in node.children:
+                    num_tips = 1
+                    if not c.is_tip():
+                        num_tips = len(list(c.tips()))
+                    avg_div += (float(num_tips) / total_tips) * (c.mean_dist + c.length)
 
-        if taxa_to_consider and taxon_name not in taxa_to_consider:
-            continue
+            node.mean_dist = avg_div
 
-        most_specific_rank = taxon_name[0:3]
-        rel_dists[Taxonomy.rank_index[most_specific_rank]][taxon_name] = node.rel_dist
+        # calculate the OTU-weighted average distance for all nodes
+        for node in tree.postorder():
+            node.num_otus = 0
+            node.weighted_dist = 0
 
-    return rel_dists
+            if node.is_tip():
+                continue
+
+            sum_otus = sum([max(c.num_otus, 1) for c in node.children])
+            weighted_dist = 0
+            for c in node.children:
+                otus = c.num_otus
+                if c.mean_dist <= self.otu_branch_length:
+                    # use mean distance as child is more distal than
+                    # the mean branch length use to define an OTU
+                    dist = c.mean_dist + c.length
+                else:
+                    # use OTU-weighted average distance
+                    dist = c.weighted_dist + c.length
+
+                weighted_dist += (float(max(otus, 1)) / sum_otus) * dist
+
+                # accumulate the number of OTUs below this node
+                if otus != 0:
+                    node.num_otus += otus
+                elif dist > self.otu_branch_length:
+                    # child lineage meets the requirements of an OTU
+                    node.num_otus += 1
+
+            node.weighted_dist = weighted_dist
+
+    def decorate_rel_dist(self, tree):
+        """Calculate relative distance to each internal node.
+
+        Parameters
+        ----------
+        tree : TreeNode
+            Root node of (sub)tree.
+
+        Returns
+        -------
+        The following attributes are added to each node:
+          mean_dist: mean distance to tips
+          num_otus: number of OTUs descendant from node
+          weighted_dist: OTU-weighted average distance
+          rel_dists: relative distance of node between root and extant organisms
+        """
+
+        self._avg_descendant_rate(tree)
+
+        for node in tree.preorder():
+            if node.is_root():
+                node.rel_dist = 0.0
+            elif node.is_tip():
+                node.rel_dist = 1.0
+            else:
+                a = node.length
+                b = node.weighted_dist
+                x = node.parent.rel_dist
+
+                if (a + b) != 0:
+                    rel_dist = x + (a / (a + b)) * (1.0 - x)
+                else:
+                    # internal node has zero length to parent,
+                    # so should have the same relative distance
+                    # as the parent node
+                    rel_dist = x
+
+                node.rel_dist = rel_dist
+
+
+    def rel_dist_to_named_clades(root, taxa_to_consider):
+        """Determine relative distance to specific taxa.
+
+        Parameters
+        ----------
+        root : TreeNode
+            Root of tree.
+        taxa_to_consider : set
+            Named taxonomic groups to consider.
+
+        Returns
+        -------
+        dict : d[rank_index][taxon] -> relative divergence
+        """
+
+        # calculate relative distance for all nodes
+        infer_rank = InferRank()
+        infer_rank.decorate_rel_dist(root)
+
+        # assign internal nodes with ranks from
+        rel_dists = defaultdict(dict)
+        for node in root.preorder(include_self=False):
+            if not node.name or node.is_tip():
+                continue
+
+            # check for support value
+            _support, taxon_name, _auxiliary_info = parse_label(node.name)
+
+            if not taxon_name:
+                continue
+
+            # get most-specific rank if a node represents multiple ranks
+            if ';' in taxon_name:
+                taxon_name = taxon_name.split(';')[-1].strip()
+
+            if taxa_to_consider and taxon_name not in taxa_to_consider:
+                continue
+
+            most_specific_rank = taxon_name[0:3]
+            rel_dists[Taxonomy.rank_index[most_specific_rank]][taxon_name] = node.rel_dist
+
+        return rel_dists

@@ -22,6 +22,7 @@ import logging
 from phylorank.decorate import Decorate
 from phylorank.newick import read_from_tree
 from phylorank.outliers import Outliers
+from phylorank.rd_ranks import RdRanks
 from phylorank.plot.robustness_plot import RobustnessPlot
 from phylorank.plot.distribution_plot import DistributionPlot
 
@@ -57,6 +58,7 @@ class OptionsParser():
 
         o = Outliers()
         o.run(options.input_tree,
+                options.taxonomy_file,
                 options.output_dir,
                 options.plot_taxa_file,
                 options.trusted_taxa_file,
@@ -113,11 +115,6 @@ class OptionsParser():
 
     def pull(self, options):
         """Pull command"""
-        self.logger.info('')
-        self.logger.info('*******************************************************************************')
-        self.logger.info(' [PhyloRank - pull] Extracting taxonomy from tree.')
-        self.logger.info('*******************************************************************************')
-
         check_file_exists(options.input_tree)
 
         t = read_from_tree(options.input_tree)
@@ -129,8 +126,6 @@ class OptionsParser():
 
         self.logger.info('')
         self.logger.info('  Taxonomy strings written to: %s' % options.output_file)
-
-        self.time_keeper.print_time_stamp()
 
     def validate(self, options):
         """Validate command"""
@@ -259,6 +254,19 @@ class OptionsParser():
 
         self.time_keeper.print_time_stamp()
 
+    def rd_ranks(self, options):
+        """Calculate number of taxa for specified rd thresholds."""
+
+        check_file_exists(options.input_tree)
+        make_sure_path_exists(options.output_dir)
+
+        r = RdRanks()
+        r.run(options.input_tree,
+                options.thresholds,
+                options.output_dir)
+
+        self.logger.info('Done.')
+
     def parse_options(self, options):
         """Parse user options and call the correct pipeline(s)"""
 
@@ -282,6 +290,8 @@ class OptionsParser():
             self.robustness_plot(options)
         elif(options.subparser_name == 'dist_plot'):
             self.dist_plot(options)
+        elif(options.subparser_name == 'rd_ranks'):
+            self.rd_ranks(options)
         else:
             self.logger.error('  [Error] Unknown PhyloRank command: ' + options.subparser_name + '\n')
             sys.exit()

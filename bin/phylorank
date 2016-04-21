@@ -61,6 +61,8 @@ def print_help():
   validate    -> Validate consistency of taxonomy
   append      -> Append taxonomy to extant tree labels
   taxon_stats -> Summary statistics of taxonomic groups
+  
+  rd_ranks    -> Calculate number of taxa for specified rd thresholds 
 
 
   [Expert commands: hide these at some point]
@@ -126,6 +128,7 @@ if __name__ == '__main__':
     outliers_parser.add_argument('-t', '--trusted_taxa_file', help="file indicating trusted taxonomic groups to use for inferring distribution (default: all taxa)", default=None)
     outliers_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa when inferring distribution (default: 0)', type=int, default=0)
     outliers_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa when inferring distribution (default: 0)", type=float, default=0.0)
+    outliers_parser.add_argument('--taxonomy_file', help='read taxonomy from this file instead of directly from tree', default=None)
 
     # plot distribution of groups in each taxonomic rank
     dist_plot_parser = subparsers.add_parser('dist_plot',
@@ -208,6 +211,15 @@ if __name__ == '__main__':
     robustness_plot_parser.add_argument('output_prefix', help="output prefix for generated files")
     robustness_plot_parser.add_argument('-m', '--min_children', help='minimum named child taxa to consider taxa', type=int, default=2)
     robustness_plot_parser.add_argument('-t', '--title', help='title of plot', default=None)
+
+    rd_ranks_parser = subparsers.add_parser('rd_ranks',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Calculate number of taxa for specified rd thresholds.')
+
+    rd_ranks_parser.add_argument('input_tree', help="input tree to calculate ranks over")
+    rd_ranks_parser.add_argument('output_dir', help="desired output directory for generated files")
+    rd_ranks_parser.add_argument('-t', '--thresholds', help="relative divergence thresholds for taxonomic ranks", type=json.loads,
+                                    default='{"p": 0.35, "c": 0.52, "o": 0.67, "f": 0.79, "g": 0.94}')
 
     # get and check options
     args = None

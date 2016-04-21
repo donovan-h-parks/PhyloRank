@@ -20,8 +20,10 @@ import sys
 import logging
 from collections import defaultdict, namedtuple
 
-from phylorank.rel_dist import rel_dist_to_named_clades
-from phylorank.common import read_taxa_file, filter_taxa_for_dist_inference
+from phylorank.rel_dist import RelativeDistance
+from phylorank.common import (read_taxa_file,
+                              filter_taxa_for_dist_inference,
+                              is_integer)
 from phylorank.newick import parse_label
 
 from skbio import TreeNode
@@ -37,7 +39,9 @@ from numpy import (mean as np_mean,
                    array as np_array,
                    arange as np_arange,
                    linspace as np_linspace,
-                   percentile as np_percentile)
+                   percentile as np_percentile,
+                   ones_like as np_ones_like,
+                   histogram as np_histogram)
 
 from scipy.stats import norm
 
@@ -250,22 +254,26 @@ class Outliers(AbstractPlot):
             rv = norm(loc=u, scale=np_std(v))
             x = np_linspace(rv.ppf(0.001), rv.ppf(0.999), 1000)
             nd = rv.pdf(x)
-            ax.plot(x, 0.75 * (nd / max(nd)) + i, 'b-', alpha=0.6, zorder=2)
-            ax.plot((u, u), (i, i + 0.5), 'b-', zorder=2)
+            # ax.plot(x, 0.75 * (nd / max(nd)) + i, 'b-', alpha=0.6, zorder=2)
+            # ax.plot((u, u), (i, i + 0.5), 'b-', zorder=2)
 
         # create percentile and classification boundary lines
         percentiles = {}
         for i, rank in enumerate(sorted(medians_for_taxa.keys())):
             v = [np_median(dists) for taxon, dists in medians_for_taxa[rank].iteritems() if taxon in taxa_for_dist_inference]
             p10, p50, p90 = np_percentile(v, [10, 50, 90])
-            ax.plot((p10, p10), (i, i + 0.5), 'r-', zorder=2)
-            ax.plot((p50, p50), (i, i + 0.5), 'r-', zorder=2)
-            ax.plot((p90, p90), (i, i + 0.5), 'r-', zorder=2)
+            ax.plot((p10, p10), (i, i + 0.25), c=(0.3, 0.3, 0.3), lw=2, zorder=2)
+            ax.plot((p50, p50), (i, i + 0.5), c=(0.3, 0.3, 0.3), lw=2, zorder=2)
+            ax.plot((p90, p90), (i, i + 0.25), c=(0.3, 0.3, 0.3), lw=2, zorder=2)
 
             for b in [-0.2, -0.1, 0.1, 0.2]:
                 boundary = p50 + b
                 if boundary < 1.0 and boundary > 0.0:
-                    ax.plot((boundary, boundary), (i, i + 0.5), 'g-', zorder=2)
+                    if abs(b) == 0.1:
+                        c = (1.0, 0.65, 0.0)  # orange
+                    else:
+                        c = (1.0, 0.0, 0.0)
+                    ax.plot((boundary, boundary), (i, i + 0.5), c=c, lw=2, zorder=2)
 
             percentiles[i] = [p10, p50, p90]
 
@@ -279,15 +287,52 @@ class Outliers(AbstractPlot):
             rank_label = Taxonomy.rank_labels[rank]
             rank_labels.append(rank_label + ' (%d)' % len(medians_for_taxa[rank]))
 
+            mono = []
+            poly = []
             for clade_label, dists in medians_for_taxa[rank].iteritems():
-                x.append(np_median(dists))
+                md = np_median(dists)
+                x.append(md)
                 y.append(i)
                 labels.append(clade_label)
 
-                if clade_label in taxa_for_dist_inference:
-                    c.append((0.0, 0.0, 0.5))
+                if is_integer(clade_label.split('_')[-1]):
+                    # taxa with a numerical suffix indicate polyphyletic
+                    # groups when decorated with tax2tree
+                    c.append((1.0, 0.0, 0.0))
+                    poly.append(md)
                 else:
-                    c.append((0.5, 0.5, 0.5))
+                    c.append((0.0, 0.0, 1.0))
+                    mono.append(md)
+
+            # histogram for each rank
+            mono = np_array(mono)
+            poly = np_array(poly)
+            binwidth = 0.025
+            bins = np_arange(0, 1.0 + binwidth, binwidth)
+
+            mono_max_count = max(np_histogram(mono, bins=bins)[0])
+            mono_weights = np_ones_like(mono) * (1.0 / mono_max_count)
+
+            w = float(len(mono)) / (len(mono) + len(poly))
+            n, b, p = ax.hist(mono, bins=bins,
+                      color=(0.0, 0.0, 1.0),
+                      alpha=0.25,
+                      weights=0.9 * w * mono_weights,
+                      bottom=i,
+                      lw=0,
+                      zorder=0)
+
+            if len(poly) > 0:
+                poly_max_count = max(np_histogram(poly, bins=bins)[0])
+                poly_weights = np_ones_like(poly) * (1.0 / poly_max_count)
+
+                ax.hist(poly, bins=bins,
+                          color=(1.0, 0.0, 0.0),
+                          alpha=0.25,
+                          weights=0.9 * (1.0 - w) * poly_weights,
+                          bottom=i + n,
+                          lw=0,
+                          zorder=0)
 
         scatter = ax.scatter(x, y, alpha=0.5, s=48, c=c, zorder=1)
 
@@ -296,7 +341,7 @@ class Outliers(AbstractPlot):
 
         ax.set_xlabel('relative distance')
         ax.set_xticks(np_arange(0, 1.05, 0.1))
-        ax.set_xlim([-0.05, 1.05])
+        ax.set_xlim([-0.01, 1.01])
 
         ax.set_ylabel('rank (no. taxa)')
         ax.set_yticks(xrange(0, len(medians_for_taxa)))
@@ -404,7 +449,7 @@ class Outliers(AbstractPlot):
                                                                                            diff_str))
         fout.close()
 
-    def run(self, input_tree, output_dir, plot_taxa_file, trusted_taxa_file, min_children, min_support):
+    def run(self, input_tree, taxonomy_file, output_dir, plot_taxa_file, trusted_taxa_file, min_children, min_support):
         """Determine distribution of taxa at each taxonomic rank.
 
         Parameters
@@ -432,9 +477,14 @@ class Outliers(AbstractPlot):
         tree = TreeNode.read(input_tree, convert_underscores=False)
 
         # pull taxonomy from tree
-        taxonomy_file = os.path.join(output_dir, 'taxonomy.tsv')
-        taxonomy = Taxonomy().read_from_tree(input_tree)
-        Taxonomy().write(taxonomy, taxonomy_file)
+        if not taxonomy_file:
+            self.logger.info('Reading taxonomy from tree.')
+            taxonomy_file = os.path.join(output_dir, 'taxonomy.tsv')
+            taxonomy = Taxonomy().read_from_tree(input_tree)
+            Taxonomy().write(taxonomy, taxonomy_file)
+        else:
+            self.logger.info('Reading taxonomy from file.')
+            taxonomy = Taxonomy().read(taxonomy_file)
 
         # read taxa to plot
         taxa_to_plot = None
@@ -447,10 +497,11 @@ class Outliers(AbstractPlot):
             trusted_taxa = read_taxa_file(trusted_taxa_file)
 
         # determine taxa to be used for inferring distribution
-        taxa_for_dist_inference = filter_taxa_for_dist_inference(tree, trusted_taxa, min_children, min_support)
+        taxa_for_dist_inference = filter_taxa_for_dist_inference(tree, taxonomy, trusted_taxa, min_children, min_support)
 
         # calculate relative distance to taxa
-        rel_dists = rel_dist_to_named_clades(tree, taxa_to_plot)
+        rd = RelativeDistance()
+        rel_dists = rd.rel_dist_to_named_clades(tree, taxa_to_plot)
 
         # report number of taxa at each rank
         print ''
@@ -476,7 +527,7 @@ class Outliers(AbstractPlot):
 
         # calculate outliers for tree rooted on each phylum
         phylum_rel_dists = {}
-        for p in phyla[0:2]:
+        for p in phyla:
             phylum = p.replace('p__', '')
             self.logger.info('Calculating information with rooting on %s.' % phylum)
 

@@ -15,9 +15,19 @@
 #                                                                             #
 ###############################################################################
 
+import sys
 from biolib.taxonomy import Taxonomy
 
 from phylorank.newick import parse_label, read_from_tree
+
+
+def is_integer(s):
+    """Test if a string represents an integer."""
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
 
 
 def read_taxa_file(taxa_file):
@@ -40,13 +50,15 @@ def read_taxa_file(taxa_file):
 
     return taxa
 
-def filter_taxa_for_dist_inference(tree, trusted_taxa, min_children, min_support):
+def filter_taxa_for_dist_inference(tree, taxonomy, trusted_taxa, min_children, min_support):
     """Determine taxa to use for inferring distribution of relative divergences.
 
     Parameters
     ----------
     tree : TreeNode
         Phylogenetic tree.
+    taxonomy : d[taxon ID] -> [d__x; p__y; ...]
+        Taxonomy for each taxon.
     trusted_taxa : iterable
         Trusted taxa to consider when inferring distribution.
     min_children : int
@@ -55,24 +67,22 @@ def filter_taxa_for_dist_inference(tree, trusted_taxa, min_children, min_support
         Only consider taxa with at least this level of support when inferring distribution.
     """
 
-    # read taxonomy and determine children taxa for each named group
-    taxonomy = Taxonomy()
-    t = read_from_tree(tree)
-    taxon_children = taxonomy.taxon_children(t)
+    # determine children taxa for each named group
+    taxon_children = Taxonomy().taxon_children(taxonomy)
 
     # get all named groups
     taxa_for_dist_inference = set()
-    for taxon_id, taxa in t.iteritems():
+    for taxon_id, taxa in taxonomy.iteritems():
         for taxon in taxa:
             taxa_for_dist_inference.add(taxon)
 
     # sanity check species names as these are a common problem
     species = set()
-    for taxon_id, taxa in t.iteritems():
+    for taxon_id, taxa in taxonomy.iteritems():
         if len(taxa) > Taxonomy.rank_index['s__']:
             species_name = taxa[Taxonomy.rank_index['s__']]
             species.add(species_name)
-            valid, error_msg = taxonomy.validate_species_name(species_name, require_full=True, require_prefix=True)
+            valid, error_msg = Taxonomy().validate_species_name(species_name, require_full=True, require_prefix=True)
             if not valid:
                 print '[Error] Species name %s for %s is invalid: %s' % (species_name, taxon_id, error_msg)
                 sys.exit(-1)
