@@ -18,11 +18,13 @@
 import os
 import sys
 import logging
+from collections import defaultdict
 
 from phylorank.decorate import Decorate
-from phylorank.newick import read_from_tree
+from phylorank.newick import parse_label
 from phylorank.outliers import Outliers
 from phylorank.rd_ranks import RdRanks
+from phylorank.bl_dist import BranchLengthDistribution
 from phylorank.plot.robustness_plot import RobustnessPlot
 from phylorank.plot.distribution_plot import DistributionPlot
 
@@ -56,14 +58,16 @@ class OptionsParser():
         if not os.path.exists(options.output_dir):
             os.makedirs(options.output_dir)
 
-        o = Outliers()
+        o = Outliers(options.dpi)
         o.run(options.input_tree,
                 options.taxonomy_file,
                 options.output_dir,
                 options.plot_taxa_file,
+                options.plot_dist_taxa_only,
                 options.trusted_taxa_file,
                 options.min_children,
-                options.min_support)
+                options.min_support,
+                options.verbose_table)
 
         self.logger.info('Done.')
 
@@ -90,10 +94,6 @@ class OptionsParser():
 
     def decorate(self, options):
         """Decorate command"""
-        self.logger.info('')
-        self.logger.info('*******************************************************************************')
-        self.logger.info(' [PhyloRank - decorate] Decorating nodes with distribution and rank info.')
-        self.logger.info('*******************************************************************************')
 
         check_file_exists(options.input_tree)
 
@@ -108,31 +108,23 @@ class OptionsParser():
                         not options.no_prediction,
                         options.thresholds)
 
-        self.logger.info('')
-        self.logger.info('  Decorated tree written to: %s' % options.output_tree)
-
-        self.time_keeper.print_time_stamp()
+        self.logger.info('Decorated tree written to: %s' % options.output_tree)
 
     def pull(self, options):
         """Pull command"""
         check_file_exists(options.input_tree)
 
-        t = read_from_tree(options.input_tree)
+        t = Taxonomy().read_from_tree(options.input_tree) #, False)
         if not options.no_rank_fill:
             for taxon_id, taxa in t.iteritems():
                 t[taxon_id] = Taxonomy().fill_missing_ranks(taxa)
 
         Taxonomy().write(t, options.output_file)
 
-        self.logger.info('')
-        self.logger.info('  Taxonomy strings written to: %s' % options.output_file)
+        self.logger.info('Taxonomy strings written to: %s' % options.output_file)
 
     def validate(self, options):
         """Validate command"""
-        self.logger.info('')
-        self.logger.info('*******************************************************************************')
-        self.logger.info(' [PhyloRank - validate] Validating consistency of taxonomy.')
-        self.logger.info('*******************************************************************************')
 
         check_file_exists(options.taxonomy_file)
 
@@ -148,16 +140,13 @@ class OptionsParser():
 
         invalid_ranks, invalid_prefixes, invalid_species_name, invalid_hierarchies = errors
 
-        self.logger.info('')
         if sum([len(e) for e in errors]) == 0:
-            self.logger.info('  No errors identified in taxonomy file.')
+            self.logger.info('No errors identified in taxonomy file.')
         else:
-            self.logger.info('  Identified %d incomplete taxonomy strings.' % len(invalid_ranks))
-            self.logger.info('  Identified %d rank prefix errors.' % len(invalid_prefixes))
-            self.logger.info('  Identified %d invalid species names.' % len(invalid_species_name))
-            self.logger.info('  Identified %d taxa with multiple parents.' % len(invalid_hierarchies))
-
-        self.time_keeper.print_time_stamp()
+            self.logger.info('Identified %d incomplete taxonomy strings.' % len(invalid_ranks))
+            self.logger.info('Identified %d rank prefix errors.' % len(invalid_prefixes))
+            self.logger.info('Identified %d invalid species names.' % len(invalid_species_name))
+            self.logger.info('Identified %d taxa with multiple parents.' % len(invalid_hierarchies))
 
     def append(self, options):
         """Append command"""
@@ -266,6 +255,80 @@ class OptionsParser():
                 options.output_dir)
 
         self.logger.info('Done.')
+        
+    def bl_dist(self, options):
+        """Calculate distribution of branch lengths at each taxonomic rank."""
+
+        check_file_exists(options.input_tree)
+        make_sure_path_exists(options.output_dir)
+
+        b = BranchLengthDistribution()
+        b.run(options.input_tree,
+                options.output_dir)
+
+        self.logger.info('Done.')
+        
+    def rank_res(self, options):
+        """Calculate taxonomic resolution at each rank."""
+
+        check_file_exists(options.input_tree)
+        check_file_exists(options.taxonomy_file)
+        
+        if options.taxa_file:
+            taxa_out = open(options.taxa_file, 'w')
+
+        # determine taxonomic resolution of named groups
+        tree = TreeNode.read(options.input_tree, convert_underscores=False)
+        rank_res = defaultdict(lambda: defaultdict(int))
+        for node in tree.preorder(include_self=False):
+            if not node.name or node.is_tip():
+                continue
+
+            _support, taxon_name, _auxiliary_info = parse_label(node.name)
+            
+            lowest_rank = [x.strip() for x in taxon_name.split(';')][-1][0:3]
+            for rank_prefix in Taxonomy.rank_prefixes:
+                if rank_prefix in taxon_name:
+                    rank_res[rank_prefix][lowest_rank] += 1
+                    if options.taxa_file:
+                        taxa_out.write('%s\t%s\t%s\n' % (rank_prefix, lowest_rank, taxon_name))
+
+        # identify any singleton taxa which are treated as having species level resolution
+        for line in open(options.taxonomy_file):
+            line_split = line.split('\t')
+            taxonomy = line_split[1].split(';')
+            
+            for i, rank_prefix in enumerate(Taxonomy.rank_prefixes):
+                if taxonomy[i] == rank_prefix:
+                    # this taxa is undefined at the specified rank so
+                    # must be the sole representative; e.g., a p__
+                    # indicates a taxon that represents a novel phyla
+                    rank_res[rank_prefix]['s__'] += 1
+                    if options.taxa_file:
+                        taxa_out.write('%s\t%s\t%s\n' % (rank_prefix, 's__', taxonomy[i]))
+                    
+        if options.taxa_file:
+            taxa_out.close()
+                      
+        # write out results
+        fout = open(options.output_file, 'w')
+        fout.write('Category')
+        for rank in Taxonomy.rank_labels[1:]:
+            fout.write('\t' + rank)
+        fout.write('\n')
+
+        for i, rank_prefix in enumerate(Taxonomy.rank_prefixes[1:]):
+            fout.write(Taxonomy.rank_labels[i+1])
+            
+            for j, r in enumerate(Taxonomy.rank_prefixes[1:]):
+                if i >= j:
+                    fout.write('\t' + str(rank_res[r].get(rank_prefix, 0)))
+                else:
+                    fout.write('\t-')
+            fout.write('\n')
+        fout.close()
+
+        self.logger.info('Done.')
 
     def parse_options(self, options):
         """Parse user options and call the correct pipeline(s)"""
@@ -292,6 +355,10 @@ class OptionsParser():
             self.dist_plot(options)
         elif(options.subparser_name == 'rd_ranks'):
             self.rd_ranks(options)
+        elif(options.subparser_name == 'bl_dist'):
+            self.bl_dist(options)
+        elif(options.subparser_name == 'rank_res'):
+            self.rank_res(options)
         else:
             self.logger.error('  [Error] Unknown PhyloRank command: ' + options.subparser_name + '\n')
             sys.exit()

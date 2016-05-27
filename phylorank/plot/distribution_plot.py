@@ -19,8 +19,7 @@ import os
 import sys
 from collections import defaultdict, namedtuple
 
-from phylorank.infer_rank import InferRank
-from phylorank.rel_dist import rel_dist_to_named_clades
+from phylorank.rel_dist import RelativeDistance
 from phylorank.common import read_taxa_file, filter_taxa_for_dist_inference
 
 from skbio import TreeNode
@@ -289,7 +288,8 @@ class DistributionPlot(AbstractPlot):
         taxa_for_dist_inference = filter_taxa_for_dist_inference(tree, trusted_taxa, min_children, min_support)
 
         # calculate relative distance to taxa
-        rel_dists = rel_dist_to_named_clades(tree, taxa_to_plot)
+        rd = RelativeDistance()
+        rel_dists = rd.rel_dist_to_named_clades(tree, taxa_to_plot)
 
         # report number of taxa at each rank
         print ''

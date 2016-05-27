@@ -19,7 +19,7 @@ import os
 import logging
 from collections import defaultdict
 
-from phylorank.infer_rank import InferRank
+from phylorank.rel_dist import RelativeDistance
 from phylorank.newick import parse_label
 
 from skbio import TreeNode
@@ -82,8 +82,8 @@ class Decorate():
             root = TreeNode.read(input_tree, convert_underscores=False)
 
         # calculate relative distance for all nodes
-        infer_rank = InferRank()
-        infer_rank.decorate_rel_dist(root)
+        rd = RelativeDistance()
+        rd.decorate_rel_dist(root)
 
         # decorate nodes based on specified criteria
         self.logger.info('')
@@ -102,7 +102,13 @@ class Decorate():
                 continue
 
             # parse taxon name and support value from node label
-            support, taxon_name, _auxiliary_info = parse_label(n.name)
+            if n.name:
+                support, taxon_name, _auxiliary_info = parse_label(n.name)
+                n.name += '|'
+            else:
+                support = 100
+                taxon_name = None
+                n.name = ''
 
             if support and float(support) < min_support:
                 continue
@@ -116,23 +122,24 @@ class Decorate():
             # the domain threshold have no real prediction, so are marked
             # with an 'X__', All other nodes will be assigned an intermediate
             # rank based on the threshold values.
-            predicted_rank = None
-            if n.rel_dist > thresholds['g']:
-                predicted_rank = 'S__'
-            elif n.rel_dist <= thresholds['d']:
-                predicted_rank = self.highly_basal_designator
-            else:
-                for i in xrange(0, len(thresholds) - 1):
-                    parent_threshold = thresholds[self.rank_designators[i]]
-                    child_threshold = thresholds[self.rank_designators[i + 1]]
-                    if n.rel_dist > parent_threshold and n.rel_dist <= child_threshold:
-                        predicted_rank = self.rank_prefixes[i + 1]
-                        break
-
             if show_prediction:
-                n.name += '|' + predicted_rank
-                if show_relative_divergence:
-                    n.name += '[rd=%.2f]' % n.rel_dist
+                predicted_rank = None
+                if n.rel_dist > thresholds['g']:
+                    predicted_rank = 'S__'
+                elif n.rel_dist <= thresholds['d']:
+                    predicted_rank = self.highly_basal_designator
+                else:
+                    for i in xrange(0, len(thresholds) - 1):
+                        parent_threshold = thresholds[self.rank_designators[i]]
+                        child_threshold = thresholds[self.rank_designators[i + 1]]
+                        if n.rel_dist > parent_threshold and n.rel_dist <= child_threshold:
+                            predicted_rank = self.rank_prefixes[i + 1]
+                            break
+
+                n.name += predicted_rank
+            
+            if show_relative_divergence:
+                n.name += '[rd=%.2f]' % n.rel_dist
 
             if taxon_name and predicted_rank != self.highly_basal_designator:
                 # tabulate number of correct and incorrect predictions
@@ -151,5 +158,5 @@ class Decorate():
         for rank_prefix in self.rank_prefixes[1:7]:
             correct_taxa = correct[rank_prefix.lower()]
             incorrect_taxa = incorrect[rank_prefix.lower()]
-            total_taxa = correct_taxa + incorrect_taxa
+            total_taxa = max(correct_taxa + incorrect_taxa, 1)
             self.logger.info('  %s\t%d of %d (%.2f%%)' % (rank_prefix, correct_taxa, total_taxa, correct_taxa * 100.0 / total_taxa))

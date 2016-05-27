@@ -41,8 +41,8 @@ from biolib.common import make_sure_path_exists
 
 def version():
     """Read program version from file."""
-    bin_dir = os.path.dirname(os.path.realpath(__file__))
-    version_file = open(os.path.join(bin_dir, '..', 'phylorank', 'VERSION'))
+    import phylorank
+    version_file = open(os.path.join(phylorank.__path__[0], 'VERSION'))
     return version_file.read().strip()
 
 
@@ -62,7 +62,11 @@ def print_help():
   append      -> Append taxonomy to extant tree labels
   taxon_stats -> Summary statistics of taxonomic groups
   
-  rd_ranks    -> Calculate number of taxa for specified rd thresholds 
+  rd_ranks    -> Calculate number of taxa for specified rd thresholds
+  
+  bl_dist     -> Calculate distribution of branch lengths at each taxonomic rank
+  
+  rank_res    -> Calculate taxonomic resolution at each rank
 
 
   [Expert commands: hide these at some point]
@@ -125,10 +129,13 @@ if __name__ == '__main__':
     outliers_parser.add_argument('input_tree', help="decorated tree for inferring relative divergence outliers")
     outliers_parser.add_argument('output_dir', help="desired output directory for generated files")
     outliers_parser.add_argument('-p', '--plot_taxa_file', help="file indicating taxonomic groups to plot (default: all taxa)", default=None)
+    outliers_parser.add_argument('--plot_dist_taxa_only', help='only plot taxa used to infer distribution', action="store_true")
     outliers_parser.add_argument('-t', '--trusted_taxa_file', help="file indicating trusted taxonomic groups to use for inferring distribution (default: all taxa)", default=None)
     outliers_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa when inferring distribution (default: 0)', type=int, default=0)
     outliers_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa when inferring distribution (default: 0)", type=float, default=0.0)
     outliers_parser.add_argument('--taxonomy_file', help='read taxonomy from this file instead of directly from tree', default=None)
+    outliers_parser.add_argument('--dpi', help='DPI of plots', type=int, default=96)
+    outliers_parser.add_argument('--verbose_table', action="store_true", help='add additional columns to output table')
 
     # plot distribution of groups in each taxonomic rank
     dist_plot_parser = subparsers.add_parser('dist_plot',
@@ -219,7 +226,24 @@ if __name__ == '__main__':
     rd_ranks_parser.add_argument('input_tree', help="input tree to calculate ranks over")
     rd_ranks_parser.add_argument('output_dir', help="desired output directory for generated files")
     rd_ranks_parser.add_argument('-t', '--thresholds', help="relative divergence thresholds for taxonomic ranks", type=json.loads,
-                                    default='{"p": 0.35, "c": 0.52, "o": 0.67, "f": 0.79, "g": 0.94}')
+                                    default='{"p": 0.35, "c": 0.52, "o": 0.67, "f": 0.79, "g": 0.94, "s":0.996}')
+                                    
+    bl_dist_parser = subparsers.add_parser('bl_dist',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Calculate distribution of branch lengths at each taxonomic rank.')
+
+    bl_dist_parser.add_argument('input_tree', help="input tree to calculate branch length distributions")
+    bl_dist_parser.add_argument('output_dir', help="desired output directory for generated files")
+    
+    rank_res_parser = subparsers.add_parser('rank_res',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Calculate taxonomic resolution at each rank.')
+
+    rank_res_parser.add_argument('input_tree', help="decorated tree")
+    rank_res_parser.add_argument('taxonomy_file', help="file with taxonomy for extant taxa")
+    rank_res_parser.add_argument('output_file', help="output file with resolution of taxa at each rank")
+    rank_res_parser.add_argument('--taxa_file', help="output file indicating taxa within each resolution category", default=None)
+
 
     # get and check options
     args = None

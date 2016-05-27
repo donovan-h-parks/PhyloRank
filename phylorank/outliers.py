@@ -23,7 +23,8 @@ from collections import defaultdict, namedtuple
 from phylorank.rel_dist import RelativeDistance
 from phylorank.common import (read_taxa_file,
                               filter_taxa_for_dist_inference,
-                              is_integer)
+                              is_integer,
+                              get_phyla_lineages)
 from phylorank.newick import parse_label
 
 from skbio import TreeNode
@@ -60,7 +61,7 @@ class Outliers(AbstractPlot):
     indicating the median distance over all rootings.
     """
 
-    def __init__(self):
+    def __init__(self, dpi=96):
         """Initialize."""
         self.logger = logging.getLogger()
 
@@ -68,6 +69,8 @@ class Outliers(AbstractPlot):
         options = Options(6, 6, 12, 96)
 
         AbstractPlot.__init__(self, options)
+        
+        self.dpi = dpi
 
         check_dependencies(['genometreetk'])
 
@@ -169,7 +172,7 @@ class Outliers(AbstractPlot):
         mpld3.save_html(self.fig, plot_file[0:plot_file.rfind('.')] + '.html')
 
         self.fig.tight_layout(pad=1)
-        self.fig.savefig(plot_file, dpi=96)
+        self.fig.savefig(plot_file, dpi=self.dpi)
 
     def _median_outlier_file(self, rel_dists, taxa_for_dist_inference, output_file):
         """Identify outliers relative to the median of rank distributions.
@@ -295,9 +298,9 @@ class Outliers(AbstractPlot):
                 y.append(i)
                 labels.append(clade_label)
 
-                if is_integer(clade_label.split('_')[-1]):
-                    # taxa with a numerical suffix indicate polyphyletic
-                    # groups when decorated with tax2tree
+                if is_integer(clade_label.split('^')[-1]):
+                    # taxa with a numerical suffix after a caret indicate 
+                    # polyphyletic groups when decorated with tax2tree
                     c.append((1.0, 0.0, 0.0))
                     poly.append(md)
                 else:
@@ -357,12 +360,14 @@ class Outliers(AbstractPlot):
         mpld3.save_html(self.fig, plot_file[0:plot_file.rfind('.')] + '.html')
 
         self.fig.tight_layout(pad=1)
-        self.fig.savefig(plot_file, dpi=96)
+        self.fig.savefig(plot_file, dpi=self.dpi)
 
     def _median_summary_outlier_file(self, phylum_rel_dists,
                                             taxa_for_dist_inference,
                                             gtdb_parent_ranks,
-                                            output_file):
+                                            outlier_table,
+                                            rank_file,
+                                            verbose_table):
         """Identify outliers relative to the median of rank distributions.
 
         Parameters
@@ -373,8 +378,12 @@ class Outliers(AbstractPlot):
             Taxa to considered when inferring distributions.
         gtdb_parent_ranks: d[taxon] -> string indicating parent taxa
             Parent taxa for each taxon.
-        output_file : str
+        outlier_table : str
             Desired name of output table.
+        rank_file : str
+            Desired name of file indicating median relative distance of each rank.
+        verbose_table : boolean
+            Print additional columns in output table.
         """
 
         # determine median relative distance for each rank abd taxa
@@ -397,11 +406,22 @@ class Outliers(AbstractPlot):
             m = np_array(m)
             median[r] = np_median(m)
             mad[r] = np_median(np_abs(m - median[r]))
-
-        fout = open(output_file, 'w')
-        fout.write('Taxa\tGTDB taxonomy\tMedian distance\tMedian absolute difference')
-        fout.write('\tMedian of rank\tMedian absolute difference\tDistance between medians')
-        fout.write('\tClosest rank\tClassifciation\tMean absolute difference\tMean difference\tDistance to rank median\n')
+            
+        fout_rank = open(rank_file, 'w')
+        median_str = []
+        for rank_index in sorted(median.keys()):
+            median_str.append('"' + Taxonomy.rank_prefixes[rank_index][0] + '":' + str(median[rank_index]))
+        fout_rank.write('{' + ','.join(median_str) + '}\n')
+        fout_rank.close()
+            
+        fout = open(outlier_table, 'w')
+        if verbose_table:
+            fout.write('Taxa\tGTDB taxonomy\tMedian distance\tMedian absolute difference')
+            fout.write('\tMedian of rank\tMedian absolute difference\tDistance between medians')
+            fout.write('\tClosest rank\tClassifciation\tMean absolute difference\tMean difference\tDistance to rank median\n')
+        else:
+            fout.write('Taxa\tGTDB taxonomy\tMedian distance\tMean difference\tClosest rank\tClassifciation\n')
+        
         for rank in sorted(median.keys()):
             for clade_label, dists in medians_for_taxa[rank].iteritems():
                 dists = np_array(dists)
@@ -435,21 +455,37 @@ class Outliers(AbstractPlot):
                     diff_str.append('%.2f' % d)
                 diff_str = ', '.join(diff_str)
 
-                fout.write('%s\t%s\t%.2f\t%.3f\t%.2f\t%.3f\t%.3f\t%s\t%s\t%.3f\t%.3f\t%s\n' % (clade_label,
-                                                                                           ';'.join(gtdb_parent_ranks[clade_label]),
-                                                                                           taxon_median,
-                                                                                           taxon_mad,
-                                                                                           median[rank],
-                                                                                           mad[rank],
-                                                                                           delta,
-                                                                                           closest_rank,
-                                                                                           classification,
-                                                                                           mean_abs_dist,
-                                                                                           mean_dist,
-                                                                                           diff_str))
+                if verbose_table:
+                    fout.write('%s\t%s\t%.2f\t%.3f\t%.3f\t%.3f\t%.3f\t%s\t%s\t%.3f\t%.3f\t%s\n' % (clade_label,
+                                                                                                   ';'.join(gtdb_parent_ranks[clade_label]),
+                                                                                                   taxon_median,
+                                                                                                   taxon_mad,
+                                                                                                   median[rank],
+                                                                                                   mad[rank],
+                                                                                                   delta,
+                                                                                                   closest_rank,
+                                                                                                   classification,
+                                                                                                   mean_abs_dist,
+                                                                                                   mean_dist,
+                                                                                                   diff_str))
+                else:
+                    fout.write('%s\t%s\t%.3f\t%.3f\t%s\t%s\n' % (clade_label,
+                                                                   ';'.join(gtdb_parent_ranks[clade_label]),
+                                                                   taxon_median,
+                                                                   mean_dist,
+                                                                   closest_rank,
+                                                                   classification))
         fout.close()
 
-    def run(self, input_tree, taxonomy_file, output_dir, plot_taxa_file, trusted_taxa_file, min_children, min_support):
+    def run(self, input_tree, 
+                    taxonomy_file, 
+                    output_dir, 
+                    plot_taxa_file,
+                    plot_dist_taxa_only,
+                    trusted_taxa_file, 
+                    min_children, 
+                    min_support,
+                    verbose_table):
         """Determine distribution of taxa at each taxonomic rank.
 
         Parameters
@@ -460,12 +496,16 @@ class Outliers(AbstractPlot):
             Desired output directory.
         plot_taxa_file : str
             File specifying taxa to plot. Set to None to consider all taxa.
+        plot_dist_taxa_only : boolean    
+            Only plot the taxa used to infer distribution.
         trusted_taxa_file : str
             File specifying trusted taxa to consider when inferring distribution. Set to None to consider all taxa.
         min_children : int
             Only consider taxa with at least the specified number of children taxa when inferring distribution.
         min_support : float
             Only consider taxa with at least this level of support when inferring distribution.
+        verbose_table : boolean
+            Print additional columns in output table.
         """
 
         # midpoint root tree
@@ -498,6 +538,10 @@ class Outliers(AbstractPlot):
 
         # determine taxa to be used for inferring distribution
         taxa_for_dist_inference = filter_taxa_for_dist_inference(tree, taxonomy, trusted_taxa, min_children, min_support)
+        
+        # limit plotted taxa
+        if plot_dist_taxa_only:
+            taxa_to_plot = taxa_for_dist_inference
 
         # calculate relative distance to taxa
         rd = RelativeDistance()
@@ -512,23 +556,16 @@ class Outliers(AbstractPlot):
         print ''
 
         # get list of phyla level lineages
-        phyla = []
-        for node in tree.preorder(include_self=False):
-            if not node.name or node.is_tip():
-                continue
-
-            _support, taxon_name, _auxiliary_info = parse_label(node.name)
-            if taxon_name:
-                taxa = [x.strip() for x in taxon_name.split(';')]
-                if taxa[-1].startswith('p__'):
-                    phyla.append(taxa[-1])
-
-        self.logger.info('Identified %d phyla for rooting.' % len(phyla))
+        all_phyla = get_phyla_lineages(tree)
+        self.logger.info('Identified %d phyla.' % len(all_phyla))
+        
+        phyla = [p for p in all_phyla if p in taxa_for_dist_inference]
+        self.logger.info('Using %d phyla as rootings for inferring distributions.' % len(phyla))
 
         # calculate outliers for tree rooted on each phylum
         phylum_rel_dists = {}
         for p in phyla:
-            phylum = p.replace('p__', '')
+            phylum = p.replace('p__', '').replace(' ', '_')
             self.logger.info('Calculating information with rooting on %s.' % phylum)
 
             phylum_dir = os.path.join(output_dir, phylum)
@@ -536,11 +573,11 @@ class Outliers(AbstractPlot):
                 os.makedirs(phylum_dir)
 
             output_tree = os.path.join(phylum_dir, 'rerooted.tree')
-            os.system('genometreetk outgroup %s %s %s %s' % (input_tree, taxonomy_file, p, output_tree))
+            os.system("genometreetk outgroup %s %s '%s' %s" % (input_tree, taxonomy_file, p, output_tree))
 
             # calculate relative distance to taxa
             cur_tree = TreeNode.read(output_tree, convert_underscores=False)
-            rel_dists = rel_dist_to_named_clades(cur_tree, taxa_to_plot)
+            rel_dists = rd.rel_dist_to_named_clades(cur_tree, taxa_to_plot)
 
             # remove named groups in outgroup
             children = Taxonomy().children(p, taxonomy)
@@ -567,4 +604,10 @@ class Outliers(AbstractPlot):
 
         gtdb_parent_ranks = Taxonomy().parents(taxonomy)
         median_outlier_table = os.path.join(output_dir, 'median_outlier_summary.tsv')
-        self._median_summary_outlier_file(phylum_rel_dists, taxa_for_dist_inference, gtdb_parent_ranks, median_outlier_table)
+        median_rank_file = os.path.join(output_dir, 'median_of_ranks.dict')
+        self._median_summary_outlier_file(phylum_rel_dists, 
+                                            taxa_for_dist_inference, 
+                                            gtdb_parent_ranks, 
+                                            median_outlier_table, 
+                                            median_rank_file, 
+                                            verbose_table)

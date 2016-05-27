@@ -20,7 +20,7 @@ import sys
 import random
 from collections import defaultdict
 
-from phylorank.infer_rank import InferRank
+from phylorank.rel_dist import RelativeDistance
 
 from skbio import TreeNode
 
@@ -65,8 +65,8 @@ class RobustnessPlot(AbstractPlot):
             root = TreeNode.read(root, convert_underscores=False)
 
         # calculate relative distance for all nodes
-        infer_rank = InferRank()
-        infer_rank.decorate_rel_dist(root)
+        rd = RelativeDistance()
+        rd.decorate_rel_dist(root)
 
         # gather information for nodes of interest
         rel_dists_to_taxon = {}

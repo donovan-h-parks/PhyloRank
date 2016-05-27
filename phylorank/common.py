@@ -18,7 +18,7 @@
 import sys
 from biolib.taxonomy import Taxonomy
 
-from phylorank.newick import parse_label, read_from_tree
+from phylorank.newick import parse_label
 
 
 def is_integer(s):
@@ -81,11 +81,14 @@ def filter_taxa_for_dist_inference(tree, taxonomy, trusted_taxa, min_children, m
     for taxon_id, taxa in taxonomy.iteritems():
         if len(taxa) > Taxonomy.rank_index['s__']:
             species_name = taxa[Taxonomy.rank_index['s__']]
-            species.add(species_name)
-            valid, error_msg = Taxonomy().validate_species_name(species_name, require_full=True, require_prefix=True)
+            valid, error_msg = True, None
+            if species_name != 's__':
+                valid, error_msg = Taxonomy().validate_species_name(species_name, require_full=True, require_prefix=True)
             if not valid:
-                print '[Error] Species name %s for %s is invalid: %s' % (species_name, taxon_id, error_msg)
-                sys.exit(-1)
+                print '[Warning] Species name %s for %s is invalid: %s' % (species_name, taxon_id, error_msg)
+                continue
+                
+            species.add(species_name)
 
     # restrict taxa to those with a sufficient number of named children
     # Note: a taxonomic group with no children will not end up in the
@@ -127,3 +130,30 @@ def filter_taxa_for_dist_inference(tree, taxonomy, trusted_taxa, min_children, m
         taxa_for_dist_inference = trusted_taxa.intersection(taxa_for_dist_inference)
 
     return taxa_for_dist_inference
+    
+    
+def get_phyla_lineages(tree):
+    """Get list of phyla level lineages.
+
+    Parameters
+    ----------
+    tree : TreeNode
+        Phylogenetic tree.
+
+    Returns
+    -------
+    list
+        List of phyla level lineages.
+    """
+    phyla = []
+    for node in tree.preorder(include_self=False):
+        if not node.name or node.is_tip():
+            continue
+
+        _support, taxon_name, _auxiliary_info = parse_label(node.name)
+        if taxon_name:
+            taxa = [x.strip() for x in taxon_name.split(';')]
+            if taxa[-1].startswith('p__'):
+                phyla.append(taxa[-1])
+                
+    return phyla
