@@ -65,6 +65,7 @@ def print_help():
   rd_ranks    -> Calculate number of taxa for specified rd thresholds
   
   bl_dist     -> Calculate distribution of branch lengths at each taxonomic rank
+  bl_decorate -> Decorate tree based using a mean branch length criterion
   
   rank_res    -> Calculate taxonomic resolution at each rank
 
@@ -128,12 +129,13 @@ if __name__ == '__main__':
 
     outliers_parser.add_argument('input_tree', help="decorated tree for inferring relative divergence outliers")
     outliers_parser.add_argument('output_dir', help="desired output directory for generated files")
-    outliers_parser.add_argument('-p', '--plot_taxa_file', help="file indicating taxonomic groups to plot (default: all taxa)", default=None)
-    outliers_parser.add_argument('--plot_dist_taxa_only', help='only plot taxa used to infer distribution', action="store_true")
+    outliers_parser.add_argument('--fixed_root', action="store_true", help='use single fixed root to infer outliers')
     outliers_parser.add_argument('-t', '--trusted_taxa_file', help="file indicating trusted taxonomic groups to use for inferring distribution (default: all taxa)", default=None)
-    outliers_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa when inferring distribution (default: 0)', type=int, default=0)
+    outliers_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa when inferring distribution', type=int, default=2)
     outliers_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa when inferring distribution (default: 0)", type=float, default=0.0)
     outliers_parser.add_argument('--taxonomy_file', help='read taxonomy from this file instead of directly from tree', default=None)
+    outliers_parser.add_argument('-p', '--plot_taxa_file', help="file indicating taxonomic groups to plot (default: all taxa)", default=None)
+    outliers_parser.add_argument('--plot_dist_taxa_only', help='only plot taxa used to infer distribution', action="store_true")
     outliers_parser.add_argument('--dpi', help='DPI of plots', type=int, default=96)
     outliers_parser.add_argument('--verbose_table', action="store_true", help='add additional columns to output table')
 
@@ -161,9 +163,9 @@ if __name__ == '__main__':
     decorate_parser.add_argument('output_tree', help="output tree with assigned taxonomic ranks")
     decorate_parser.add_argument('-t', '--thresholds', help="relative divergence thresholds for taxonomic ranks", type=json.loads,
                                     default='{"d": 0.33, "p": 0.56, "c": 0.65, "o": 0.78, "f": 0.92, "g": 0.99}')
-    decorate_parser.add_argument('-s', '--min_support', help="only decorate nodes above the specified support value", type=float, default=0)
+    decorate_parser.add_argument('-s', '--min_support', help="only decorate nodes above the specified support value (default=0)", type=float, default=0)
     decorate_parser.add_argument('-n', '--only_named_clades', help="only decorate nodes with an existing label", action='store_true')
-    decorate_parser.add_argument('-l', '--min_length', help="only decorate nodes with a parent branch above the specified length", type=float, default=0.0)
+    decorate_parser.add_argument('-l', '--min_length', help="only decorate nodes with a parent branch above the specified length (default=0)", type=float, default=0.0)
     decorate_parser.add_argument('--no_percentile', action="store_true", help="do not decorate with percentile information")
     decorate_parser.add_argument('--no_relative_divergence', action="store_true", help="do not decorate with relative divergence information")
     decorate_parser.add_argument('--no_prediction', action="store_true", help="do not decorate with predicted rank information")
@@ -234,7 +236,20 @@ if __name__ == '__main__':
 
     bl_dist_parser.add_argument('input_tree', help="input tree to calculate branch length distributions")
     bl_dist_parser.add_argument('output_dir', help="desired output directory for generated files")
+    bl_dist_parser.add_argument('-t', '--trusted_taxa_file', help="file indicating trusted taxonomic groups to use for inferring distribution (default: all taxa)", default=None)
+    bl_dist_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa when inferring distribution', type=int, default=2)
+    bl_dist_parser.add_argument('--taxonomy_file', help='read taxonomy from this file instead of directly from tree', default=None)
     
+    bl_decorate_parser = subparsers.add_parser('bl_decorate',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Decorate tree based using a mean branch length criterion.')
+
+    bl_decorate_parser.add_argument('input_tree', help="input tree to decorate")
+    bl_decorate_parser.add_argument('threshold', help="mean branch length threshold", type=float)
+    bl_decorate_parser.add_argument('rank', help="rank of labels", type=int, choices=[1, 2, 3, 4, 5, 6])
+    bl_decorate_parser.add_argument('output_tree', help="decorate tree")
+    #bl_decorate_parser.add_argument('--respect_taxa', help='respect existing named taxa at a given rank', type=int, choices=[1, 2, 3, 4, 5, 6], default=None)
+
     rank_res_parser = subparsers.add_parser('rank_res',
                                             formatter_class=CustomHelpFormatter,
                                             description='Calculate taxonomic resolution at each rank.')

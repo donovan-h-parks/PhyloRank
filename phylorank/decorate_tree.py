@@ -32,7 +32,7 @@ To do:
 '''
 
 
-class Decorate():
+class DecorateTree():
     """Decorate nodes with taxonomic ranks inferred from evolutionary divergence."""
 
     def __init__(self):
@@ -123,18 +123,15 @@ class Decorate():
             # with an 'X__', All other nodes will be assigned an intermediate
             # rank based on the threshold values.
             if show_prediction:
+                # calculate distance to each median threshold
+                min_dist = 1e6
                 predicted_rank = None
-                if n.rel_dist > thresholds['g']:
-                    predicted_rank = 'S__'
-                elif n.rel_dist <= thresholds['d']:
-                    predicted_rank = self.highly_basal_designator
-                else:
-                    for i in xrange(0, len(thresholds) - 1):
-                        parent_threshold = thresholds[self.rank_designators[i]]
-                        child_threshold = thresholds[self.rank_designators[i + 1]]
-                        if n.rel_dist > parent_threshold and n.rel_dist <= child_threshold:
-                            predicted_rank = self.rank_prefixes[i + 1]
-                            break
+                for rank, threshold in thresholds.iteritems():
+                    d = abs(n.rel_dist - threshold)
+                    if d < min_dist:
+                        min_dist = d
+                        rank_index = self.rank_designators.index(rank)
+                        predicted_rank = self.rank_prefixes[rank_index]
 
                 n.name += predicted_rank
             
