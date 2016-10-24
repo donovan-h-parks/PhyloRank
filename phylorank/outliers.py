@@ -563,6 +563,7 @@ class Outliers(AbstractPlot):
                     output_dir, 
                     plot_taxa_file,
                     plot_dist_taxa_only,
+                    plot_domain,
                     trusted_taxa_file,
                     fixed_root,
                     min_children, 
@@ -580,6 +581,8 @@ class Outliers(AbstractPlot):
             File specifying taxa to plot. Set to None to consider all taxa.
         plot_dist_taxa_only : boolean    
             Only plot the taxa used to infer distribution.
+        plot_domain : boolean
+            Plot domain rank.
         trusted_taxa_file : str
             File specifying trusted taxa to consider when inferring distribution. Set to None to consider all taxa.
         fixed_root : boolean
@@ -599,11 +602,12 @@ class Outliers(AbstractPlot):
         # read tree
         self.logger.info('Reading tree.')
         tree = TreeNode.read(input_tree, convert_underscores=False)
+        input_tree_name = os.path.splitext(os.path.basename(input_tree))[0]
 
         # pull taxonomy from tree
         if not taxonomy_file:
             self.logger.info('Reading taxonomy from tree.')
-            taxonomy_file = os.path.join(output_dir, 'taxonomy.tsv')
+            taxonomy_file = os.path.join(output_dir, '%s.taxonomy.tsv' % input_tree_name)
             taxonomy = Taxonomy().read_from_tree(input_tree)
             Taxonomy().write(taxonomy, taxonomy_file)
         else:
@@ -628,21 +632,21 @@ class Outliers(AbstractPlot):
         # limit plotted taxa
         if plot_dist_taxa_only:
             taxa_to_plot = taxa_for_dist_inference
-
+            
         # calculate relative distance to taxa
         rd = RelativeDistance()
         rel_dists = rd.rel_dist_to_named_clades(tree, taxa_to_plot)
-
+        
         # check if a single fixed root should be used
         if fixed_root:
             self.logger.info('Using single fixed rooting for inferring distributions.')
             
             # create fixed rooting style tables and plots
-            distribution_table = os.path.join(output_dir, 'rank_distribution.tsv')
-            plot_file = os.path.join(output_dir, 'rank_distribution.png')
+            distribution_table = os.path.join(output_dir, '%s.tsv' % input_tree_name)
+            plot_file = os.path.join(output_dir, '%s.png' % input_tree_name)
             self._distribution_plot(rel_dists, taxa_for_dist_inference, distribution_table, plot_file)
 
-            median_outlier_table = os.path.join(output_dir, 'median_outlier.tsv')
+            median_outlier_table = os.path.join(output_dir, '%s.tsv' % input_tree_name)
             self._median_outlier_file(rel_dists, 
                                         taxa_for_dist_inference, 
                                         gtdb_parent_ranks, 
@@ -679,6 +683,9 @@ class Outliers(AbstractPlot):
                 # calculate relative distance to taxa
                 cur_tree = TreeNode.read(output_tree, convert_underscores=False)
                 rel_dists = rd.rel_dist_to_named_clades(cur_tree, taxa_to_plot)
+                
+                if not plot_domain:
+                    rel_dists.pop(0, None)
 
                 # remove named groups in outgroup
                 children = Taxonomy().children(p, taxonomy)
@@ -702,11 +709,11 @@ class Outliers(AbstractPlot):
                                             gtdb_parent_ranks,
                                             median_outlier_table)
 
-            plot_file = os.path.join(output_dir, 'rank_distribution_summary.png')
+            plot_file = os.path.join(output_dir, '%s.png' % input_tree_name)
             self._distribution_summary_plot(phylum_rel_dists, taxa_for_dist_inference, plot_file)
 
-            median_outlier_table = os.path.join(output_dir, 'median_outlier_summary.tsv')
-            median_rank_file = os.path.join(output_dir, 'median_of_ranks.dict')
+            median_outlier_table = os.path.join(output_dir, '%s.tsv' % input_tree_name)
+            median_rank_file = os.path.join(output_dir, '%s.dict' % input_tree_name)
             self._median_summary_outlier_file(phylum_rel_dists, 
                                                 taxa_for_dist_inference, 
                                                 gtdb_parent_ranks, 

@@ -150,3 +150,27 @@ class RelativeDistance():
             rel_dists[Taxonomy.rank_index[most_specific_rank]][taxon_name] = node.rel_dist
 
         return rel_dists
+        
+    def scale(self, input_tree, output_tree):
+        """Scale branches of tree to reflect relative distances.
+
+        Parameters
+        ----------
+        input_tree : str
+            Tree in Newick format.
+        output_tree : str
+            Desired name of output tree.
+        """
+        
+        root = TreeNode.read(input_tree, convert_underscores=False)
+        
+        self.decorate_rel_dist(root)
+        
+        for n in root.preorder():
+            if n == root:
+                continue
+                
+            rd_to_parent = n.rel_dist - n.parent.rel_dist
+            n.length = rd_to_parent
+            
+        root.write(output_tree)

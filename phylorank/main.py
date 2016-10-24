@@ -21,6 +21,7 @@ import logging
 from collections import defaultdict
 
 from phylorank.decorate_tree import DecorateTree
+from phylorank.rel_dist import RelativeDistance
 from phylorank.newick import parse_label
 from phylorank.outliers import Outliers
 from phylorank.rd_ranks import RdRanks
@@ -66,6 +67,7 @@ class OptionsParser():
                 options.output_dir,
                 options.plot_taxa_file,
                 options.plot_dist_taxa_only,
+                options.plot_domain,
                 options.trusted_taxa_file,
                 options.fixed_root,
                 options.min_children,
@@ -112,7 +114,17 @@ class OptionsParser():
                     options.thresholds)
 
         self.logger.info('Decorated tree written to: %s' % options.output_tree)
+        
+    def scale(self, options):
+        """Scale command"""
 
+        check_file_exists(options.input_tree)
+        
+        rd = RelativeDistance()
+        rd.scale(options.input_tree, options.output_tree)
+        
+        self.logger.info('Decorated tree written to: %s' % options.output_tree)
+        
     def pull(self, options):
         """Pull command"""
         check_file_exists(options.input_tree)
@@ -274,114 +286,48 @@ class OptionsParser():
 
         self.logger.info('Done.')
         
+    def bl_optimal(self, options):
+        """Determine branch length for best congruency with existing taxonomy."""
+        
+        b = BranchLengthDistribution()
+        optimal_bl, correct_taxa, incorrect_taxa = b.optimal(options.input_tree, 
+                                                                options.rank,
+                                                                options.output_table)
+        
+        prec = float(correct_taxa) / (correct_taxa + incorrect_taxa)
+        
+        self.logger.info('Optimal branch length is %f.' % optimal_bl)
+        self.logger.info('This results in %d correct and %d incorrect taxa (precision = %.2f).' % (correct_taxa, incorrect_taxa, prec))
+        
     def bl_decorate(self, options):
         """Decorate tree based using a mean branch length criterion."""
         
         check_file_exists(options.input_tree)
         
-        # read tree
-        self.logger.info('Reading tree.')
-        tree = TreeNode.read(options.input_tree, convert_underscores=False)
+        b = BranchLengthDistribution()
+        b.decorate(options.input_tree, 
+                    options.taxonomy_file,
+                    options.threshold, 
+                    options.rank, 
+                    options.retain_named_lineages,
+                    options.keep_labels,
+                    options.prune,
+                    options.output_tree)
         
-        # decorate tree
-        rank_prefix = Taxonomy.rank_prefixes[options.rank]
-        parent_rank_prefix = Taxonomy.rank_prefixes[options.rank-1]
-        new_name_number = defaultdict(int)
-        ncbi_only = 0
-        sra_only = 0
-        for node in tree.preorder():     
-            # make sure node is a leaf
-            if node.is_tip():
-                continue
-                
-            # check if ancestor already has a label at this rank
-            p = node
-            within_named_lineage = False
-            parent_taxon = None
-            while p and not within_named_lineage:
-                if p.name:
-                    support, taxon_name, _auxiliary_info = parse_label(p.name)
-                    
-                    for taxon in [x.strip() for x in taxon_name.split(';')]:
-                        if taxon.startswith(rank_prefix):
-                            within_named_lineage = True
-                        if taxon.startswith(parent_rank_prefix):
-                            parent_taxon = taxon
-                    
-                p = p.parent
-                
-            if within_named_lineage:
-                continue
-                
-            # check if descendant node already has a label at this rank
-            above_named_lineage = False
-            for c in node.preorder():
-                if c.name:
-                    support, taxon_name, _auxiliary_info = parse_label(c.name)
-                    for taxon in [x.strip() for x in taxon_name.split(';')]:
-                        if taxon.startswith(rank_prefix):
-                            above_named_lineage = True
-                            
-                if above_named_lineage:
-                    break
-                        
-            if above_named_lineage:
-                continue
-                
-            # check if node meets mean branch length criterion
-            dists_to_tips = []
-            for t in node.tips():
-                dists_to_tips.append(t.accumulate_to_ancestor(node))
-                
-            if np_mean(dists_to_tips) >= options.threshold:
-                continue
-                                
-            # count number of SRA and NCBI taxa below node
-            num_sra_taxa = 0
-            num_ncbi_taxa = 0
-            for t in node.tips():
-                if t.name.startswith('U_'):
-                    num_sra_taxa += 1
-                else:
-                    num_ncbi_taxa += 1
-                
-            # node meets all criteria            
-            lineage_name = rank_prefix + parent_taxon[3:] + ' ' + Taxonomy.rank_labels[options.rank]
-            
-            support = None
-            taxon_name = None
-            if node.name: # preserve support information
-                support, taxon_name, _auxiliary_info = parse_label(node.name)
-                
-            if taxon_name:
-                lineage_name = taxon_name + '; ' + lineage_name
-                
-            new_name_number[lineage_name] += 1
+        self.logger.info('Done.')
+        
+    def bl_table(self, options):
+        """Produce table with number of lineage for increasing mean branch lengths."""
 
-            if support:
-                node.name = '%d:%s %d SRA%d_NCBI%d' % (support,
-                                                            lineage_name,
-                                                            new_name_number[lineage_name],
-                                                            num_sra_taxa, 
-                                                            num_ncbi_taxa)
-            else:    
-                node.name = '%s %d SRA%d_NCBI%d' % (lineage_name,
-                                                        new_name_number[lineage_name],
-                                                        num_sra_taxa, 
-                                                        num_ncbi_taxa)
-                
-            print node.name
-            
-            if num_sra_taxa == 0:
-                ncbi_only += 1
-            if num_ncbi_taxa == 0:
-                sra_only += 1
-            
-        self.logger.info('Decorated %d nodes.' % sum(new_name_number.values()))
-        self.logger.info('NCBI-only %d; SRA-only %d' % (ncbi_only, sra_only))
-        
-        tree.write(options.output_tree)
-        
+        check_file_exists(options.input_tree)
+        check_file_exists(options.taxon_category)
+
+        b = BranchLengthDistribution()
+        b.table(options.input_tree,
+                options.taxon_category,
+                options.step_size,
+                options.output_table)
+
         self.logger.info('Done.')
         
     def rank_res(self, options):
@@ -457,6 +403,8 @@ class OptionsParser():
             self.outliers(options)
         elif(options.subparser_name == 'decorate'):
             self.decorate(options)
+        elif(options.subparser_name == 'scale'):
+            self.scale(options)
         elif(options.subparser_name == 'pull'):
             self.pull(options)
         elif(options.subparser_name == 'validate'):
@@ -473,8 +421,12 @@ class OptionsParser():
             self.rd_ranks(options)
         elif(options.subparser_name == 'bl_dist'):
             self.bl_dist(options)
+        elif(options.subparser_name == 'bl_optimal'):
+            self.bl_optimal(options)
         elif(options.subparser_name == 'bl_decorate'):
             self.bl_decorate(options)
+        elif(options.subparser_name == 'bl_table'):
+            self.bl_table(options)    
         elif(options.subparser_name == 'rank_res'):
             self.rank_res(options)
         else:

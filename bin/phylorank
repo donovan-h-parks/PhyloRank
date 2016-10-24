@@ -56,6 +56,7 @@ def print_help():
   outliers    -> Create table and plot useful for identifying taxonomic outliers
   dist_plot   -> Plot distribution of taxa in each taxonomic rank
   decorate    -> Decorate nodes with distribution information and predicted taxonomic ranks
+  scale       -> Scale tree to reflect PhyloRank relative distances 
 
   pull        -> Pull taxonomy information from tree
   validate    -> Validate consistency of taxonomy
@@ -65,7 +66,9 @@ def print_help():
   rd_ranks    -> Calculate number of taxa for specified rd thresholds
   
   bl_dist     -> Calculate distribution of branch lengths at each taxonomic rank
-  bl_decorate -> Decorate tree based using a mean branch length criterion
+  bl_optimal  -> Determine branch length for best congruency with existing taxonomy
+  bl_decorate -> Decorate tree using a mean branch length criterion
+  bl_table    -> Produce table with number of lineage for increasing mean branch lengths
   
   rank_res    -> Calculate taxonomic resolution at each rank
 
@@ -135,6 +138,7 @@ if __name__ == '__main__':
     outliers_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa when inferring distribution (default: 0)", type=float, default=0.0)
     outliers_parser.add_argument('--taxonomy_file', help='read taxonomy from this file instead of directly from tree', default=None)
     outliers_parser.add_argument('-p', '--plot_taxa_file', help="file indicating taxonomic groups to plot (default: all taxa)", default=None)
+    outliers_parser.add_argument('--plot_domain', action="store_true", help='show domain rank in plot')
     outliers_parser.add_argument('--plot_dist_taxa_only', help='only plot taxa used to infer distribution', action="store_true")
     outliers_parser.add_argument('--dpi', help='DPI of plots', type=int, default=96)
     outliers_parser.add_argument('--verbose_table', action="store_true", help='add additional columns to output table')
@@ -170,6 +174,14 @@ if __name__ == '__main__':
     decorate_parser.add_argument('--no_relative_divergence', action="store_true", help="do not decorate with relative divergence information")
     decorate_parser.add_argument('--no_prediction', action="store_true", help="do not decorate with predicted rank information")
 
+    # scale tree to reflect relative distances
+    scale_parser = subparsers.add_parser('scale',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Scale tree to reflect PhyloRank relative distances .')
+
+    scale_parser.add_argument('input_tree', help="input tree to decorate")
+    scale_parser.add_argument('output_tree', help="output tree with scaled branch lengths")
+    
     # pull taxonomy strings from tree
     pull_parser = subparsers.add_parser('pull',
                                             formatter_class=CustomHelpFormatter,
@@ -240,16 +252,37 @@ if __name__ == '__main__':
     bl_dist_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa when inferring distribution', type=int, default=2)
     bl_dist_parser.add_argument('--taxonomy_file', help='read taxonomy from this file instead of directly from tree', default=None)
     
+    
+    bl_optimal_parser = subparsers.add_parser('bl_optimal',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Determine branch length for best congruency with existing taxonomy.')
+
+    bl_optimal_parser.add_argument('input_tree', help="input tree to calculate branch length distributions")
+    bl_optimal_parser.add_argument('rank', help="rank of labels", type=int, choices=[1, 2, 3, 4, 5, 6])
+    bl_optimal_parser.add_argument('output_table', help="desired named of output table")
+    
     bl_decorate_parser = subparsers.add_parser('bl_decorate',
                                             formatter_class=CustomHelpFormatter,
                                             description='Decorate tree based using a mean branch length criterion.')
 
     bl_decorate_parser.add_argument('input_tree', help="input tree to decorate")
+    bl_decorate_parser.add_argument('taxonomy_file', help="file with taxonomic information for each taxon")
     bl_decorate_parser.add_argument('threshold', help="mean branch length threshold", type=float)
     bl_decorate_parser.add_argument('rank', help="rank of labels", type=int, choices=[1, 2, 3, 4, 5, 6])
     bl_decorate_parser.add_argument('output_tree', help="decorate tree")
-    #bl_decorate_parser.add_argument('--respect_taxa', help='respect existing named taxa at a given rank', type=int, choices=[1, 2, 3, 4, 5, 6], default=None)
+    bl_decorate_parser.add_argument('--retain_named_lineages', action="store_true", help='retain existing named lineages at the specified rank')
+    bl_decorate_parser.add_argument('--keep_labels', action="store_true", help='keep all existing internal labels')
+    bl_decorate_parser.add_argument('--prune', action="store_true", help='prune tree to preserve only the shallowest and deepest taxa in each child lineage from newly decorated nodes')
 
+    bl_table_parser = subparsers.add_parser('bl_table',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Produce table with number of lineage for increasing mean branch lengths.')
+
+    bl_table_parser.add_argument('input_tree', help="input tree to calculate branch length distributions")
+    bl_table_parser.add_argument('taxon_category', help="file indicating category for each taxon in the tree")
+    bl_table_parser.add_argument('output_table', help="desired named of output table")
+    bl_table_parser.add_argument('--step_size', help="step size for mean branch length criterion", type=float, default=0.01)
+    
     rank_res_parser = subparsers.add_parser('rank_res',
                                             formatter_class=CustomHelpFormatter,
                                             description='Calculate taxonomic resolution at each rank.')
