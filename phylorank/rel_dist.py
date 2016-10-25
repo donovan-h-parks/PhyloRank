@@ -24,7 +24,7 @@ from phylorank.newick import parse_label
 
 from biolib.taxonomy import Taxonomy
 
-from skbio import TreeNode
+import dendropy
 
 from numpy import (mean as np_mean,
                    std as np_std,
@@ -47,8 +47,8 @@ class RelativeDistance():
 
         Parameters
         ----------
-        tree : TreeNode
-            Root node of (sub)tree.
+        tree : Dendropy Tree
+            Phylogenetic tree.
 
         Returns
         -------
@@ -58,16 +58,16 @@ class RelativeDistance():
         """
 
         # calculate the mean branch length to extant taxa
-        for node in tree.postorder():
+        for node in tree.postorder_node_iter():
             avg_div = 0
-            if node.is_tip():
+            if node.is_leaf():
                 node.mean_dist = 0.0
                 node.num_taxa = 1
             else:
-                node.num_taxa = len(list(node.tips()))
-                for c in node.children:
+                node.num_taxa = sum([1 for _ in node.leaf_iter()])
+                for c in node.child_node_iter():
                     num_tips = c.num_taxa
-                    avg_div += (float(c.num_taxa) / node.num_taxa) * (c.mean_dist + c.length)
+                    avg_div += (float(c.num_taxa) / node.num_taxa) * (c.mean_dist + c.edge_length)
 
             node.mean_dist = avg_div
 
@@ -76,8 +76,8 @@ class RelativeDistance():
 
         Parameters
         ----------
-        tree : TreeNode
-            Root node of (sub)tree.
+        tree : Dendropy Tree
+            Phylogenetic tree.
 
         Returns
         -------
@@ -89,15 +89,15 @@ class RelativeDistance():
 
         self._avg_descendant_rate(tree)
 
-        for node in tree.preorder():
-            if node.is_root():
+        for node in tree.preorder_node_iter():
+            if node == tree.seed_node:
                 node.rel_dist = 0.0
-            elif node.is_tip():
+            elif node.is_leaf():
                 node.rel_dist = 1.0
             else:
-                a = node.length
+                a = node.edge_length
                 b = node.mean_dist
-                x = node.parent.rel_dist
+                x = node.parent_node.rel_dist
 
                 if (a + b) != 0:
                     rel_dist = x + (a / (a + b)) * (1.0 - x)
@@ -109,13 +109,13 @@ class RelativeDistance():
 
                 node.rel_dist = rel_dist
 
-    def rel_dist_to_named_clades(self, root, taxa_to_consider):
+    def rel_dist_to_named_clades(self, tree, taxa_to_consider):
         """Determine relative distance to specific taxa.
 
         Parameters
         ----------
-        root : TreeNode
-            Root of tree.
+        tree : Dendropy Tree
+            Phylogenetic tree.
         taxa_to_consider : set
             Named taxonomic groups to consider.
 
@@ -125,16 +125,16 @@ class RelativeDistance():
         """
 
         # calculate relative distance for all nodes
-        self.decorate_rel_dist(root)
+        self.decorate_rel_dist(tree)
 
         # assign internal nodes with ranks from
         rel_dists = defaultdict(dict)
-        for node in root.preorder(include_self=False):
-            if not node.name or node.is_tip():
+        for node in tree.preorder_node_iter(lambda n: n != tree.seed_node):
+            if not node.label or node.is_leaf():
                 continue
 
             # check for support value
-            _support, taxon_name, _auxiliary_info = parse_label(node.name)
+            _support, taxon_name, _auxiliary_info = parse_label(node.label)
 
             if not taxon_name:
                 continue
@@ -150,27 +150,3 @@ class RelativeDistance():
             rel_dists[Taxonomy.rank_index[most_specific_rank]][taxon_name] = node.rel_dist
 
         return rel_dists
-        
-    def scale(self, input_tree, output_tree):
-        """Scale branches of tree to reflect relative distances.
-
-        Parameters
-        ----------
-        input_tree : str
-            Tree in Newick format.
-        output_tree : str
-            Desired name of output tree.
-        """
-        
-        root = TreeNode.read(input_tree, convert_underscores=False)
-        
-        self.decorate_rel_dist(root)
-        
-        for n in root.preorder():
-            if n == root:
-                continue
-                
-            rd_to_parent = n.rel_dist - n.parent.rel_dist
-            n.length = rd_to_parent
-            
-        root.write(output_tree)

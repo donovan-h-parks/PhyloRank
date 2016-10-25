@@ -16,6 +16,7 @@
 ###############################################################################
 
 import sys
+
 from biolib.taxonomy import Taxonomy
 
 from phylorank.newick import parse_label
@@ -55,7 +56,7 @@ def filter_taxa_for_dist_inference(tree, taxonomy, trusted_taxa, min_children, m
 
     Parameters
     ----------
-    tree : TreeNode
+    tree : Dendropy Tree
         Phylogenetic tree.
     taxonomy : d[taxon ID] -> [d__x; p__y; ...]
         Taxonomy for each taxon.
@@ -108,12 +109,12 @@ def filter_taxa_for_dist_inference(tree, taxonomy, trusted_taxa, min_children, m
 
     # restrict taxa used for inferring distribution to those with sufficient support
     if min_support > 0:
-        for node in tree.preorder(include_self=False):
-            if not node.name or node.is_tip():
+        for node in tree.preorder_node_iter():
+            if not node.label or node.is_leaf():
                 continue
 
             # check for support value
-            support, taxon_name, _auxiliary_info = parse_label(node.name)
+            support, taxon_name, _auxiliary_info = parse_label(node.label)
 
             if not taxon_name:
                 continue
@@ -137,7 +138,7 @@ def get_phyla_lineages(tree):
 
     Parameters
     ----------
-    tree : TreeNode
+    tree : Dendropy Tree
         Phylogenetic tree.
 
     Returns
@@ -146,11 +147,11 @@ def get_phyla_lineages(tree):
         List of phyla level lineages.
     """
     phyla = []
-    for node in tree.preorder(include_self=False):
-        if not node.name or node.is_tip():
+    for node in tree.preorder_node_iter():
+        if not node.label or node.is_leaf():
             continue
 
-        _support, taxon_name, _auxiliary_info = parse_label(node.name)
+        _support, taxon_name, _auxiliary_info = parse_label(node.label)
         if taxon_name:
             taxa = [x.strip() for x in taxon_name.split(';')]
             if taxa[-1].startswith('p__'):

@@ -27,8 +27,6 @@ from phylorank.common import (read_taxa_file,
                               get_phyla_lineages)
 from phylorank.newick import parse_label
 
-from skbio import TreeNode
-
 from biolib.taxonomy import Taxonomy
 from biolib.plots.abstract_plot import AbstractPlot
 from biolib.external.execute import check_dependencies
@@ -46,6 +44,7 @@ from numpy import (mean as np_mean,
 
 from scipy.stats import norm
 
+import dendropy
 import mpld3
 
 
@@ -73,6 +72,65 @@ class Outliers(AbstractPlot):
         self.dpi = dpi
 
         check_dependencies(['genometreetk'])
+        
+    def root_with_outgroup(self, input_tree, taxonomy, outgroup_taxa):
+        """Reroot the tree using the given outgroup.
+
+        Parameters
+        ----------
+        input_tree : Dendropy Tree
+          Tree to rerooted.
+        taxonomy : dict
+            Taxonomy for taxa.
+        outgroup : iterable
+          Labels of taxa in outgroup.
+          
+        Returns
+        -------
+        Dendropy Tree
+            Deep-copy of original tree rerooted on outgroup.
+        """
+        
+        new_tree = input_tree.clone()
+        
+        outgroup = set()
+        for genome_id, taxa in taxonomy.iteritems():
+            if outgroup_taxa in taxa:
+                outgroup.add(genome_id)
+        self.logger.info('Identifying %d genomes in the outgroup.' % len(outgroup))
+
+        outgroup_in_tree = set()
+        for n in new_tree.leaf_node_iter():
+            if n.taxon.label in outgroup:
+                outgroup_in_tree.add(n.taxon)
+        self.logger.info('Identified %d outgroup taxa in the tree.' % len(outgroup_in_tree))
+
+        if len(outgroup_in_tree) == 0:
+            self.logger.warning('No outgroup taxa identified in the tree.')
+            self.logger.warning('Tree was not rerooted.')
+            sys.exit(0)
+
+        mrca = new_tree.mrca(taxa=outgroup_in_tree)
+
+        if len(mrca.leaf_nodes()) != len(outgroup_in_tree):
+            self.logger.info('Outgroup is not monophyletic. Tree will be rerooted at the MRCA of the outgroup.')
+            self.logger.info('The outgroup consisted of %d taxa, while the MRCA has %d leaf nodes.' % (len(outgroup_in_tree), len(mrca.leaf_nodes())))
+            if len(mrca.leaf_nodes()) == len(tree.leaf_nodes()):
+                self.logger.warning('The MRCA spans all taxa in the tree.')
+                self.logger.warning('This indicating the selected outgroup is likely polyphyletic in the current tree.')
+                self.logger.warning('Polyphyletic outgroups are not suitable for rooting. Try another outgroup.')
+        else:
+            self.logger.info('Outgroup is monophyletic.')
+
+        if mrca.edge_length is None:
+            self.logger.info('Tree appears to already be rooted on this outgroup.')
+        else:
+            self.logger.info('Rerooting tree.')
+            new_tree.reroot_at_edge(mrca.edge,
+                                length1=0.5 * mrca.edge_length,
+                                length2=0.5 * mrca.edge_length)
+        
+        return new_tree
 
     def _distribution_plot(self, rel_dists, taxa_for_dist_inference, distribution_table, plot_file):
         """Create plot showing the distribution of taxa at each taxonomic rank.
@@ -575,6 +633,8 @@ class Outliers(AbstractPlot):
         ----------
         input_tree : str
             Name of input tree.
+        taxonomy_file : str
+            File with taxonomy strings for each taxa.
         output_dir : str
             Desired output directory.
         plot_taxa_file : str
@@ -601,7 +661,11 @@ class Outliers(AbstractPlot):
 
         # read tree
         self.logger.info('Reading tree.')
-        tree = TreeNode.read(input_tree, convert_underscores=False)
+        tree = dendropy.Tree.get_from_path(input_tree, 
+                                            schema='newick', 
+                                            rooting='force-rooted', 
+                                            preserve_underscores=True)
+
         input_tree_name = os.path.splitext(os.path.basename(input_tree))[0]
 
         # pull taxonomy from tree
@@ -670,18 +734,19 @@ class Outliers(AbstractPlot):
             # calculate outliers for tree rooted on each phylum
             phylum_rel_dists = {}
             for p in phyla:
-                phylum = p.replace('p__', '').replace(' ', '_')
-                self.logger.info('Calculating information with rooting on %s.' % phylum)
+                phylum = p.replace('p__', '').replace(' ', '_').lower()
+                self.logger.info('Calculating information with rooting on %s.' % phylum.capitalize())
 
                 phylum_dir = os.path.join(output_dir, phylum)
                 if not os.path.exists(phylum_dir):
                     os.makedirs(phylum_dir)
 
-                output_tree = os.path.join(phylum_dir, 'rerooted.tree')
-                os.system("genometreetk outgroup %s %s '%s' %s" % (input_tree, taxonomy_file, p, output_tree))
+                cur_tree = self.root_with_outgroup(tree, taxonomy, p)
+                
+                output_tree = os.path.join(phylum_dir, '%s.rooted.tree' % phylum)
+                cur_tree.write_to_path(output_tree, schema='newick', suppress_rooting=True, unquoted_underscores=True)
 
                 # calculate relative distance to taxa
-                cur_tree = TreeNode.read(output_tree, convert_underscores=False)
                 rel_dists = rd.rel_dist_to_named_clades(cur_tree, taxa_to_plot)
                 
                 if not plot_domain:
@@ -699,11 +764,11 @@ class Outliers(AbstractPlot):
                 phylum_rel_dists[phylum] = rel_dists
 
                 # create distribution plot
-                distribution_table = os.path.join(phylum_dir, 'rank_distribution.tsv')
-                plot_file = os.path.join(phylum_dir, 'rank_distribution.png')
+                distribution_table = os.path.join(phylum_dir, '%s.rank_distribution.tsv' % phylum)
+                plot_file = os.path.join(phylum_dir, '%s.rank_distribution.png' % phylum)
                 self._distribution_plot(rel_dists, taxa_for_dist_inference, distribution_table, plot_file)
 
-                median_outlier_table = os.path.join(phylum_dir, 'median_outlier.tsv')
+                median_outlier_table = os.path.join(phylum_dir, '%s.median_outlier.tsv' % phylum)
                 self._median_outlier_file(rel_dists, 
                                             taxa_for_dist_inference, 
                                             gtdb_parent_ranks,
@@ -720,3 +785,135 @@ class Outliers(AbstractPlot):
                                                 median_outlier_table, 
                                                 median_rank_file, 
                                                 verbose_table)
+
+    def scale(self, 
+                input_tree, 
+                taxonomy_file,
+                output_dir,
+                trusted_taxa_file,
+                fixed_root,
+                min_children, 
+                min_support):
+        """Scale branches of tree to reflect relative distances.
+
+        Parameters
+        ----------
+        input_tree : str
+            Tree in Newick format.
+        taxonomy_file : str
+            File with taxonomy strings for each taxa.
+        output_dir : str
+            Desired output directory.
+        trusted_taxa_file : str
+            File specifying trusted taxa to consider when inferring distribution. Set to None to consider all taxa.
+        fixed_root : boolean
+            Use single root for calculating relative divergence values.
+        min_children : int
+            Only consider taxa with at least the specified number of children taxa when inferring distribution.
+        min_support : float
+            Only consider taxa with at least this level of support when inferring distribution.
+        """
+        
+        input_tree_name = os.path.splitext(os.path.basename(input_tree))[0]
+        
+        tree = dendropy.Tree.get_from_path(input_tree, 
+                                            schema='newick', 
+                                            rooting='force-rooted', 
+                                            preserve_underscores=True)
+
+        rd = RelativeDistance()
+        
+        # check if a single fixed root should be used
+        if fixed_root:
+            self.logger.info('Using single fixed rooting for inferring distributions.')
+            rd.decorate_rel_dist(tree)
+            
+            for n in tree.preorder_node_iter(lambda n: n != tree.seed_node):
+                rd_to_parent = n.rel_dist - n.parent_node.rel_dist
+                n.edge_length = rd_to_parent
+        else:
+            self.logger.info('Determining relative divergences with rootings at named phyla.')
+            
+            # pull taxonomy from tree or from file
+            if not taxonomy_file:
+                self.logger.info('Reading taxonomy from tree.')
+                taxonomy_file = os.path.join(output_dir, '%s.taxonomy.tsv' % input_tree_name)
+                taxonomy = Taxonomy().read_from_tree(input_tree)
+                Taxonomy().write(taxonomy, taxonomy_file)
+            else:
+                self.logger.info('Reading taxonomy from file.')
+                taxonomy = Taxonomy().read(taxonomy_file)
+                
+            # read trusted taxa
+            trusted_taxa = None
+            if trusted_taxa_file:
+                trusted_taxa = read_taxa_file(trusted_taxa_file)
+                
+            # determine taxa to be used for inferring distribution
+            taxa_for_dist_inference = filter_taxa_for_dist_inference(tree, taxonomy, trusted_taxa, min_children, min_support)
+        
+            # get list of phyla level lineages
+            all_phyla = get_phyla_lineages(tree)
+            self.logger.info('Identified %d phyla.' % len(all_phyla))
+            
+            phyla = [p for p in all_phyla if p in taxa_for_dist_inference]
+            self.logger.info('Using %d phyla as rootings for inferring distributions.' % len(phyla))
+            if len(phyla) < 2:
+                self.logger.error('Rescaling requires at least 2 valid phyla.')
+                sys.exit(-1)
+
+            # give each node a unique id
+            for i, n in enumerate(tree.preorder_node_iter()):
+                n.id = i
+            
+            # calculate outliers for tree rooted on each phylum
+            rel_dists = defaultdict(list)
+            for p in phyla:
+                phylum = p.replace('p__', '').replace(' ', '_').lower()
+                self.logger.info('Calculating information with rooting on %s.' % phylum.capitalize())
+
+                phylum_dir = os.path.join(output_dir, phylum)
+                if not os.path.exists(phylum_dir):
+                    os.makedirs(phylum_dir)
+                    
+                cur_tree = self.root_with_outgroup(tree, taxonomy, p)
+                cur_tree.write_to_path(os.path.join(phylum_dir, '%s.rooted.tree' % phylum), 
+                                        schema='newick', 
+                                        suppress_rooting=True, 
+                                        unquoted_underscores=True)
+
+
+                # calculate relative distance to taxa
+                rd.decorate_rel_dist(cur_tree)
+                
+                # do a preorder traversal of 'ingroup'
+                ingroup_subtree = None
+                for c in cur_tree.seed_node.child_node_iter():
+                    _support, taxon_name, _auxiliary_info = parse_label(c.label)
+                    if not taxon_name or p not in taxon_name:
+                        ingroup_subtree = c
+                        break
+                
+                # do a preorder traversal of tree
+                for n in ingroup_subtree.preorder_iter():                        
+                    rd_to_parent = n.rel_dist - n.parent_node.rel_dist
+                    n.edge_length = rd_to_parent
+                    rel_dists[n.id].append(n.rel_dist)
+
+                cur_tree.write_to_path(os.path.join(phylum_dir, '%s.scaled.tree' % phylum), 
+                                        schema='newick', 
+                                        suppress_rooting=True, 
+                                        unquoted_underscores=True)
+                                        
+            # set edge lengths to median value over all rootings
+            tree.seed_node.rel_dist = 0.0
+            for n in tree.preorder_node_iter(lambda n: n != tree.seed_node):
+                n.rel_dist = np_median(rel_dists[n.id])
+                rd_to_parent = n.rel_dist - n.parent_node.rel_dist
+                n.edge_length = rd_to_parent
+
+        output_tree = os.path.join(output_dir, '%s.scaled.tree' % input_tree_name)
+        tree.write_to_path(output_tree, 
+                            schema='newick', 
+                            suppress_rooting=True, 
+                            unquoted_underscores=True)

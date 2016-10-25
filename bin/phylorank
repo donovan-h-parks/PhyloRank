@@ -56,7 +56,7 @@ def print_help():
   outliers    -> Create table and plot useful for identifying taxonomic outliers
   dist_plot   -> Plot distribution of taxa in each taxonomic rank
   decorate    -> Decorate nodes with distribution information and predicted taxonomic ranks
-  scale       -> Scale tree to reflect PhyloRank relative distances 
+  scale       -> Scale tree to reflect PhyloRank relative divergence 
 
   pull        -> Pull taxonomy information from tree
   validate    -> Validate consistency of taxonomy
@@ -128,7 +128,7 @@ if __name__ == '__main__':
     # create table and plot useful for identifying taxonomic outliers.
     outliers_parser = subparsers.add_parser('outliers',
                                             formatter_class=CustomHelpFormatter,
-                                            description='Create information for identifying taxnomic outliers')
+                                            description='Create information for identifying taxonomic outliers')
 
     outliers_parser.add_argument('input_tree', help="decorated tree for inferring relative divergence outliers")
     outliers_parser.add_argument('output_dir', help="desired output directory for generated files")
@@ -143,6 +143,20 @@ if __name__ == '__main__':
     outliers_parser.add_argument('--dpi', help='DPI of plots', type=int, default=96)
     outliers_parser.add_argument('--verbose_table', action="store_true", help='add additional columns to output table')
 
+    # scale tree to reflect relative distances
+    scale_parser = subparsers.add_parser('scale',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Scale tree to reflect PhyloRank relative divergence.')
+
+    scale_parser.add_argument('input_tree', help="input tree to decorate")
+    scale_parser.add_argument('output_dir', help="desired output directory for generated files")
+    scale_parser.add_argument('--fixed_root', action="store_true", help='use single fixed root for calculating relative divergence')
+    scale_parser.add_argument('-t', '--trusted_taxa_file', help="file indicating trusted taxonomic groups to use for inferring distribution (default: all taxa)", default=None)
+    scale_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa when inferring distribution', type=int, default=2)
+    scale_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa when inferring distribution (default: 0)", type=float, default=0.0)
+    scale_parser.add_argument('--taxonomy_file', help='read taxonomy from this file instead of directly from tree', default=None)
+    
+    
     # plot distribution of groups in each taxonomic rank
     dist_plot_parser = subparsers.add_parser('dist_plot',
                                             formatter_class=CustomHelpFormatter,
@@ -174,14 +188,6 @@ if __name__ == '__main__':
     decorate_parser.add_argument('--no_relative_divergence', action="store_true", help="do not decorate with relative divergence information")
     decorate_parser.add_argument('--no_prediction', action="store_true", help="do not decorate with predicted rank information")
 
-    # scale tree to reflect relative distances
-    scale_parser = subparsers.add_parser('scale',
-                                            formatter_class=CustomHelpFormatter,
-                                            description='Scale tree to reflect PhyloRank relative distances .')
-
-    scale_parser.add_argument('input_tree', help="input tree to decorate")
-    scale_parser.add_argument('output_tree', help="output tree with scaled branch lengths")
-    
     # pull taxonomy strings from tree
     pull_parser = subparsers.add_parser('pull',
                                             formatter_class=CustomHelpFormatter,
@@ -222,10 +228,10 @@ if __name__ == '__main__':
     # plot relative distance of groups across a set of trees.
     robustness_plot_parser = subparsers.add_parser('robustness_plot',
                                             formatter_class=CustomHelpFormatter,
-                                            description='Plot relative distance of groups across a set of trees')
+                                            description='Plot relative divergence of groups across a set of trees')
 
     robustness_plot_parser.add_argument('rank', help="taxonomic rank of named groups to plot", type=int, choices=[1, 2, 3, 4, 5, 6])
-    robustness_plot_parser.add_argument('input_tree_dir', help="directory containing trees to inferred relative distance across")
+    robustness_plot_parser.add_argument('input_tree_dir', help="directory containing trees to inferred relative divergence across")
     robustness_plot_parser.add_argument('full_tree_file', help="unmodified tree to include in plot; must be decorate with taxonomy")
     robustness_plot_parser.add_argument('derep_tree_file', help="dereplicated tree to include in plot")
     robustness_plot_parser.add_argument('taxonomy_file', help="file indicating taxonomy string for each genome")
@@ -263,7 +269,7 @@ if __name__ == '__main__':
     
     bl_decorate_parser = subparsers.add_parser('bl_decorate',
                                             formatter_class=CustomHelpFormatter,
-                                            description='Decorate tree based using a mean branch length criterion.')
+                                            description='Decorate tree using a mean branch length criterion.')
 
     bl_decorate_parser.add_argument('input_tree', help="input tree to decorate")
     bl_decorate_parser.add_argument('taxonomy_file', help="file with taxonomic information for each taxon")

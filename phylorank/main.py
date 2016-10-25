@@ -36,10 +36,9 @@ from biolib.taxonomy import Taxonomy
 from biolib.misc.time_keeper import TimeKeeper
 from biolib.external.execute import check_dependencies
 
-from skbio import TreeNode
-
 from numpy import (mean as np_mean)
 
+import dendropy
 
 class OptionsParser():
     def __init__(self):
@@ -74,6 +73,25 @@ class OptionsParser():
                 options.min_support,
                 options.verbose_table)
 
+        self.logger.info('Done.')
+        
+    def scale(self, options):
+        """Scale command"""
+
+        check_file_exists(options.input_tree)
+        
+        if not os.path.exists(options.output_dir):
+            os.makedirs(options.output_dir)
+        
+        outliers = Outliers()
+        outliers.scale(options.input_tree,
+                        options.taxonomy_file,
+                        options.output_dir,
+                        options.trusted_taxa_file,
+                        options.fixed_root,
+                        options.min_children,
+                        options.min_support)
+        
         self.logger.info('Done.')
 
     def dist_plot(self, options):
@@ -114,17 +132,7 @@ class OptionsParser():
                     options.thresholds)
 
         self.logger.info('Decorated tree written to: %s' % options.output_tree)
-        
-    def scale(self, options):
-        """Scale command"""
-
-        check_file_exists(options.input_tree)
-        
-        rd = RelativeDistance()
-        rd.scale(options.input_tree, options.output_tree)
-        
-        self.logger.info('Decorated tree written to: %s' % options.output_tree)
-        
+   
     def pull(self, options):
         """Pull command"""
         check_file_exists(options.input_tree)
@@ -175,15 +183,22 @@ class OptionsParser():
 
         taxonomy = Taxonomy().read(options.taxonomy_file)
 
-        root = TreeNode.read(options.input_tree, convert_underscores=False)
-        for n in root.tips():
-            taxa_str = taxonomy.get(n.name, None)
+        tree = dendropy.Tree.get_from_path(options.input_tree, 
+                                            schema='newick', 
+                                            rooting='force-rooted', 
+                                            preserve_underscores=True)
+        
+        for n in tree.leaf_node_iter():
+            taxa_str = taxonomy.get(n.label, None)
             if taxa_str == None:
-                self.logger.error('  [Error] Taxonomy file does not contain an entry for %s.' % n.name)
+                self.logger.error('Taxonomy file does not contain an entry for %s.' % n.label)
                 sys.exit(-1)
-            n.name = n.name + '|' + ';'.join(taxonomy[n.name])
+            n.label = n.label + '|' + ';'.join(taxonomy[n.label])
 
-        root.write(options.output_tree)
+        tree.write_to_path(options.output_tree, 
+                            schema='newick', 
+                            suppress_rooting=True, 
+                            unquoted_underscores=True)
 
         self.logger.info('')
         self.logger.info('  Decorated tree written to: %s' % options.output_tree)
@@ -192,11 +207,6 @@ class OptionsParser():
 
     def taxon_stats(self, options):
         """Taxon stats command"""
-        self.logger.info('')
-        self.logger.info('*******************************************************************************')
-        self.logger.info(' [PhyloRank - taxon_stats] Summarizing statistics of taxonomic groups.')
-        self.logger.info('*******************************************************************************')
-
         check_file_exists(options.taxonomy_file)
 
         taxonomy = Taxonomy().read(options.taxonomy_file)
@@ -234,10 +244,7 @@ class OptionsParser():
 
         fout.close()
 
-        self.logger.info('')
-        self.logger.info('  Summary statistics written to: %s' % options.output_file)
-
-        self.time_keeper.print_time_stamp()
+        self.logger.info('Summary statistics written to: %s' % options.output_file)
 
     def robustness_plot(self, options):
         """Robustness plot command"""
@@ -340,20 +347,25 @@ class OptionsParser():
             taxa_out = open(options.taxa_file, 'w')
 
         # determine taxonomic resolution of named groups
-        tree = TreeNode.read(options.input_tree, convert_underscores=False)
+        tree = dendropy.Tree.get_from_path(options.input_tree, 
+                                            schema='newick', 
+                                            rooting='force-rooted', 
+                                            preserve_underscores=True)
+        
         rank_res = defaultdict(lambda: defaultdict(int))
-        for node in tree.preorder(include_self=False):
-            if not node.name or node.is_tip():
+        for node in tree.preorder_node_iter(lambda n: n != tree.seed_node):
+            if not node.label or node.is_leaf():
                 continue
 
-            _support, taxon_name, _auxiliary_info = parse_label(node.name)
+            _support, taxon_name, _auxiliary_info = parse_label(node.label)
             
-            lowest_rank = [x.strip() for x in taxon_name.split(';')][-1][0:3]
-            for rank_prefix in Taxonomy.rank_prefixes:
-                if rank_prefix in taxon_name:
-                    rank_res[rank_prefix][lowest_rank] += 1
-                    if options.taxa_file:
-                        taxa_out.write('%s\t%s\t%s\n' % (rank_prefix, lowest_rank, taxon_name))
+            if taxon_name:
+                lowest_rank = [x.strip() for x in taxon_name.split(';')][-1][0:3]
+                for rank_prefix in Taxonomy.rank_prefixes:
+                    if rank_prefix in taxon_name:
+                        rank_res[rank_prefix][lowest_rank] += 1
+                        if options.taxa_file:
+                            taxa_out.write('%s\t%s\t%s\n' % (rank_prefix, lowest_rank, taxon_name))
 
         # identify any singleton taxa which are treated as having species level resolution
         for line in open(options.taxonomy_file):

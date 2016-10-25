@@ -26,7 +26,6 @@ from phylorank.common import (get_phyla_lineages, filter_taxa_for_dist_inference
 from biolib.taxonomy import Taxonomy
 
 import dendropy
-from skbio import TreeNode
 
 from numpy import (mean as np_mean,
                    std as np_std,
@@ -63,9 +62,10 @@ class BranchLengthDistribution():
                 if node.label:
                     support, taxon_name, _auxiliary_info = parse_label(node.label)
                     
-                    for taxon in [x.strip() for x in taxon_name.split(';')]:
-                        if taxon.startswith(rank_prefix):
-                            taxa.append(taxon)
+                    if taxon_name:
+                        for taxon in [x.strip() for x in taxon_name.split(';')]:
+                            if taxon.startswith(rank_prefix):
+                                taxa.append(taxon)
                             
                 if len(taxa) >= 2:
                     break
@@ -113,9 +113,10 @@ class BranchLengthDistribution():
             if node.label:
                 support, taxon_name, _auxiliary_info = parse_label(node.label)
                 
-                for taxon in [x.strip() for x in taxon_name.split(';')]:
-                    if taxon.startswith(rank_prefix):
-                        node_taxon = taxon
+                if taxon_name:
+                    for taxon in [x.strip() for x in taxon_name.split(';')]:
+                        if taxon.startswith(rank_prefix):
+                            node_taxon = taxon
                         
             if not node_taxon or node_taxon == 'p__Patescibacteria':
                 continue
@@ -126,9 +127,10 @@ class BranchLengthDistribution():
                 if c.label:
                     support, taxon_name, _auxiliary_info = parse_label(c.label)
                     
-                    for taxon in [x.strip() for x in taxon_name.split(';')]:
-                        if taxon.startswith(child_rank_prefix):
-                            child_rank_taxa.append(taxon)
+                    if taxon_name:
+                        for taxon in [x.strip() for x in taxon_name.split(';')]:
+                            if taxon.startswith(child_rank_prefix):
+                                child_rank_taxa.append(taxon)
                             
                 if len(child_rank_taxa) >= 2:
                     break
@@ -337,9 +339,10 @@ class BranchLengthDistribution():
                 if p.label:
                     support, taxon_name, _auxiliary_info = parse_label(p.label)
                     
-                    for taxon in [x.strip() for x in taxon_name.split(';')]:
-                        if taxon.startswith(rank_prefix):
-                            parent_taxon = taxon
+                    if taxon_name:
+                        for taxon in [x.strip() for x in taxon_name.split(';')]:
+                            if taxon.startswith(rank_prefix):
+                                parent_taxon = taxon
                     
                 p = p.parent_node
                     
@@ -353,9 +356,11 @@ class BranchLengthDistribution():
             for c in node.preorder_internal_node_iter():
                 if c.label:
                     support, taxon_name, _auxiliary_info = parse_label(c.label)
-                    for taxon in [x.strip() for x in taxon_name.split(';')]:
-                        if taxon.startswith(rank_prefix):
-                            children_taxon.append(taxon)
+                    
+                    if taxon_name:
+                        for taxon in [x.strip() for x in taxon_name.split(';')]:
+                            if taxon.startswith(rank_prefix):
+                                children_taxon.append(taxon)
                         
             if retain_named_lineages and children_taxon:
                 for c in node.child_node_iter():
@@ -419,7 +424,6 @@ class BranchLengthDistribution():
                                                         num_sra_taxa, 
                                                         num_ncbi_taxa)
                                                         
-            print node.label
             labeled_nodes.add(node)
                  
             if num_sra_taxa == 0:
@@ -483,7 +487,10 @@ class BranchLengthDistribution():
             Desired output directory.
         """
 
-        tree = TreeNode.read(input_tree, convert_underscores=False)
+        tree = dendropy.Tree.get_from_path(input_tree, 
+                                            schema='newick', 
+                                            rooting='force-rooted', 
+                                            preserve_underscores=True)
         
         # pull taxonomy from tree
         if not taxonomy_file:
@@ -507,11 +514,11 @@ class BranchLengthDistribution():
         rank_bl_dist = defaultdict(list)
         taxa_bl_dist = defaultdict(list)
         taxa_at_rank = defaultdict(list)
-        for node in tree.postorder():
-            if node.is_tip() or not node.name:
+        for node in tree.postorder_node_iter():
+            if node.is_leaf() or not node.label:
                 continue
                 
-            _support, taxon, _auxiliary_info = parse_label(node.name)
+            _support, taxon, _auxiliary_info = parse_label(node.label)
             if not taxon:
                 continue
                 
@@ -522,10 +529,14 @@ class BranchLengthDistribution():
             most_specific_rank = taxon[0:3]
             taxa_at_rank[Taxonomy.rank_index[most_specific_rank]].append(taxon)
                 
-            for tip in node.tips():
-                bl = tip.accumulate_to_ancestor(node)
+            for n in node.leaf_iter():
+                dist_to_node = 0
+                while n != node:
+                    dist_to_node += n.edge_length
+                    n = n.parent_node
+                
                 for t in taxa:
-                    taxa_bl_dist[t].append(bl)
+                    taxa_bl_dist[t].append(dist_to_node)
 
             rank = Taxonomy.rank_labels[Taxonomy.rank_index[most_specific_rank]]
             if rank != 'species' or Taxonomy().validate_species_name(taxon):

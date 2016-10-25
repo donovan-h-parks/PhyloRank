@@ -18,8 +18,6 @@
 
 from biolib.common import is_float
 
-from skbio import TreeNode
-
 
 '''Helper functions for parsing Newick information.'''
 

@@ -22,8 +22,7 @@ from collections import defaultdict
 from phylorank.rel_dist import RelativeDistance
 from phylorank.newick import parse_label
 
-from skbio import TreeNode
-
+import dendropy
 
 '''
 To do:
@@ -77,13 +76,14 @@ class DecorateTree():
         """
 
         # make sure we have a TreeNode object
-        root = input_tree
-        if not isinstance(root, TreeNode):
-            root = TreeNode.read(input_tree, convert_underscores=False)
+        tree = dendropy.Tree.get_from_path(input_tree, 
+                                            schema='newick', 
+                                            rooting='force-rooted', 
+                                            preserve_underscores=True)
 
         # calculate relative distance for all nodes
         rd = RelativeDistance()
-        rd.decorate_rel_dist(root)
+        rd.decorate_rel_dist(tree)
 
         # decorate nodes based on specified criteria
         self.logger.info('')
@@ -94,21 +94,21 @@ class DecorateTree():
 
         fout = open(output_tree + '.info', 'w')
         fout.write('Taxon name\tPredicted rank\tRelative divergence\tCurrent rank percentile\tPredicted rank percentile\n')
-        for n in root.preorder():
-            if n.is_tip():
+        for n in tree.preorder_node_iter():
+            if n.is_leaf():
                 continue
 
-            if n.length < min_length:
+            if n.edge_length < min_length:
                 continue
 
             # parse taxon name and support value from node label
-            if n.name:
-                support, taxon_name, _auxiliary_info = parse_label(n.name)
-                n.name += '|'
+            if n.label:
+                support, taxon_name, _auxiliary_info = parse_label(n.label)
+                n.label += '|'
             else:
                 support = 100
                 taxon_name = None
-                n.name = ''
+                n.label = ''
 
             if support and float(support) < min_support:
                 continue
@@ -133,10 +133,10 @@ class DecorateTree():
                         rank_index = self.rank_designators.index(rank)
                         predicted_rank = self.rank_prefixes[rank_index]
 
-                n.name += predicted_rank
+                n.label += predicted_rank
             
             if show_relative_divergence:
-                n.name += '[rd=%.2f]' % n.rel_dist
+                n.label += '[rd=%.2f]' % n.rel_dist
 
             if taxon_name and predicted_rank != self.highly_basal_designator:
                 # tabulate number of correct and incorrect predictions

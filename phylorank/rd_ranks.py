@@ -26,10 +26,10 @@ from phylorank.common import get_phyla_lineages
 
 from biolib.taxonomy import Taxonomy
 
-from skbio import TreeNode
-
 from numpy import (mean as np_mean,
                    std as np_std)
+                   
+import dendropy
 
 
 class RdRanks():
@@ -139,44 +139,47 @@ class RdRanks():
             os.system('genometreetk outgroup %s %s %s %s' % (input_tree, taxonomy_file, p, output_tree))
 
             # calculate relative distance for all nodes
-            cur_tree = TreeNode.read(output_tree, convert_underscores=False)
+            cur_tree = dendropy.Tree.get_from_path(output_tree, 
+                                                schema='newick', 
+                                                rooting='force-rooted', 
+                                                preserve_underscores=True)
             rd.decorate_rel_dist(cur_tree)
 
             # determine ranks
-            for n in cur_tree.postorder():
-                if n.is_root():
-                    continue
-                    
+            for n in cur_tree.postorder_node_iter(lambda n: n != tree.seed_node):
                 ranks = []
                 for rank_prefix, threshold in rd_thresholds.iteritems():
-                    if n.rel_dist >= threshold and n.parent.rel_dist < threshold:
+                    if n.rel_dist >= threshold and n.parent_node.rel_dist < threshold:
                         ranks.append(rank_prefix.capitalize() + '__')
                         
                 if ranks:
-                    if not n.name:
-                        n.name = '|%s [rd=%.2f]' % (';'.join(ranks), n.rel_dist)
+                    if not n.label:
+                        n.label = '|%s [rd=%.2f]' % (';'.join(ranks), n.rel_dist)
                     else:
-                        n.name += '|%s [rd=%.2f]' % (';'.join(ranks), n.rel_dist)
+                        n.label += '|%s [rd=%.2f]' % (';'.join(ranks), n.rel_dist)
 
-            cur_tree.write(os.path.join(phylum_dir, 'rd_ranks.tree'))
+            cur_tree.write_to_path(os.path.join(phylum_dir, 'rd_ranks.tree'), 
+                                    schema='newick', 
+                                    suppress_rooting=True, 
+                                    unquoted_underscores=True)
             
             # determine number of ranks below root and all named nodes
             ranks_below_taxon = defaultdict(lambda: defaultdict(int))
-            for cur_node in cur_tree.postorder():
-                if cur_node.is_root():
+            for cur_node in cur_tree.postorder_node_iter():
+                if cur_node == cur_tree.seed_node:
                     cur_taxon = 'root'
-                elif cur_node.name:
-                    _support, cur_taxon, _auxiliary_info = parse_label(cur_node.name)
+                elif cur_node.label:
+                    _support, cur_taxon, _auxiliary_info = parse_label(cur_node.label)
                     if not cur_taxon or cur_taxon.strip() == '':
                         continue
                 else:
                     continue
                         
-                for n in cur_node.postorder():
-                    if not n.name:
+                for n in cur_node.postorder_iter():
+                    if not n.label:
                         continue
                         
-                    _support, _taxon, auxiliary_info = parse_label(n.name)
+                    _support, _taxon, auxiliary_info = parse_label(n.label)
                     if auxiliary_info:
                         ranks = auxiliary_info[0:auxiliary_info.rfind('[')]
                         ranks = [r.strip() for r in ranks.split(';')]
