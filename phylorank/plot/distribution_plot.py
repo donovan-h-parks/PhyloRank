@@ -22,8 +22,6 @@ from collections import defaultdict, namedtuple
 from phylorank.rel_dist import RelativeDistance
 from phylorank.common import read_taxa_file, filter_taxa_for_dist_inference
 
-from skbio import TreeNode
-
 from biolib.taxonomy import Taxonomy
 from biolib.plots.abstract_plot import AbstractPlot
 
@@ -37,6 +35,8 @@ from numpy import (mean as np_mean,
 from scipy.stats import norm
 
 import mpld3
+
+import dendropy
 
 
 class DistributionPlot(AbstractPlot):
@@ -272,7 +272,10 @@ class DistributionPlot(AbstractPlot):
         """
 
         # read tree
-        tree = TreeNode.read(input_tree, convert_underscores=False)
+        tree = dendropy.Tree.get_from_path(input_tree, 
+                                            schema='newick', 
+                                            rooting='force-rooted', 
+                                            preserve_underscores=True)
 
         # read taxa to plot
         taxa_to_plot = None

@@ -22,8 +22,6 @@ from collections import defaultdict
 
 from phylorank.rel_dist import RelativeDistance
 
-from skbio import TreeNode
-
 from biolib.taxonomy import Taxonomy
 from biolib.plots.abstract_plot import AbstractPlot
 
@@ -33,6 +31,7 @@ from numpy import (mean as np_mean,
                    percentile as np_percentile)
 
 import mpld3
+import dendropy
 
 
 class RobustnessPlot(AbstractPlot):
@@ -42,13 +41,13 @@ class RobustnessPlot(AbstractPlot):
         """Initialize."""
         AbstractPlot.__init__(self, None)
 
-    def rel_dist_to_specified_groups(self, tree, groups_to_consider, groups):
+    def rel_dist_to_specified_groups(self, tree_file, groups_to_consider, groups):
         """Determine relative distance to specified named clades.
 
         Parameters
         ----------
-        tree : str or TreeNode
-          A newick string or a TreeNode
+        tree_file : str
+          File containing a tree in Newick format.
         groups_to_consider: set
           Taxonomic groups to consider.
         groups : d[taxon] -> list of children
@@ -59,14 +58,14 @@ class RobustnessPlot(AbstractPlot):
         dict : d[taxon] -> relative distance to root
         """
 
-        # make sure we have a TreeNode object
-        root = tree
-        if not isinstance(root, TreeNode):
-            root = TreeNode.read(root, convert_underscores=False)
+        tree = dendropy.Tree.get_from_path(tree_file, 
+                                            schema='newick', 
+                                            rooting='force-rooted', 
+                                            preserve_underscores=True)
 
         # calculate relative distance for all nodes
         rd = RelativeDistance()
-        rd.decorate_rel_dist(root)
+        rd.decorate_rel_dist(tree)
 
         # gather information for nodes of interest
         rel_dists_to_taxon = {}
@@ -79,7 +78,7 @@ class RobustnessPlot(AbstractPlot):
             tips = []
             for t in taxa_ids:
                 try:
-                    tip = root.find(t)
+                    tip = tree.find(t)
                     tips.append(tip)
                 except:
                     continue
@@ -88,7 +87,7 @@ class RobustnessPlot(AbstractPlot):
                 # group is within the phylum removed from the tree
                 continue
 
-            lca_node = root.lca(tips)
+            lca_node = tree.lca(tips)
 
             if len(list(lca_node.tips())) != len(tips):
                 print '  [Warning] Group is not monophyletic %s' % taxon
@@ -105,11 +104,14 @@ class RobustnessPlot(AbstractPlot):
 
         # determine named clades in full tree
         named_clades = set()
-        print full_tree_file
-        tree = TreeNode.read(full_tree_file)
-        for node in tree.preorder():
-            if node.name:
-                taxonomy = node.name.split(';')
+        tree = dendropy.Tree.get_from_path(full_tree_file, 
+                                            schema='newick', 
+                                            rooting='force-rooted', 
+                                            preserve_underscores=True)
+        
+        for node in tree.preorder_node_iter():
+            if node.label:
+                taxonomy = node.label.split(';')
                 named_clades.add(taxonomy[-1].strip().split(':')[-1])
 
         print 'Identified %d named clades in full tree.' % len(named_clades)
@@ -140,7 +142,10 @@ class RobustnessPlot(AbstractPlot):
         # calculate relative distance for full tree
         print ''
         print 'Calculating relative distance over full tree.'
-        tree = TreeNode.read(full_tree_file, convert_underscores=False)
+        tree = dendropy.Tree.get_from_path(full_tree_file, 
+                                            schema='newick', 
+                                            rooting='force-rooted', 
+                                            preserve_underscores=True)
         full_rel_dist, _full_dist_components, polyphyletic = self.rel_dist_to_specified_groups(tree, groups_to_consider, groups)
         if len(polyphyletic) > 0:
             print ''
@@ -149,7 +154,11 @@ class RobustnessPlot(AbstractPlot):
         # calculate relative distance for dereplicated tree
         print ''
         print 'Calculating relative distance over dereplicated tree.'
-        tree = TreeNode.read(derep_tree_file, convert_underscores=False)
+        tree = dendropy.Tree.get_from_path(derep_tree_file, 
+                                            schema='newick', 
+                                            rooting='force-rooted', 
+                                            preserve_underscores=True)
+        
         derep_rel_dist, derep_dist_components, polyphyletic = self.rel_dist_to_specified_groups(tree, groups_to_consider, groups)
 
         groups_to_consider = groups_to_consider - polyphyletic
@@ -166,7 +175,10 @@ class RobustnessPlot(AbstractPlot):
             print f
 
             tree_file = os.path.join(input_tree_dir, f)
-            tree = TreeNode.read(tree_file, convert_underscores=False)
+            tree = dendropy.Tree.get_from_path(tree_file, 
+                                            schema='newick', 
+                                            rooting='force-rooted', 
+                                            preserve_underscores=True)
 
             # calculate relative distance to named taxa
             rel_dist, components, _polyphyletic = self.rel_dist_to_specified_groups(tree, groups_to_consider, groups)
