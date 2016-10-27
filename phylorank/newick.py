@@ -43,18 +43,19 @@ def parse_label(label):
     support = None
     taxon = None
     auxiliary_info = None
+    
+    if label:
+        label = label.strip()
+        if '|' in label:
+            label, auxiliary_info = label.split('|')
 
-    label = label.strip()
-    if '|' in label:
-        label, auxiliary_info = label.split('|')
-
-    if ':' in label:
-        support, taxon = label.split(':')
-        support = float(support)
-    else:
-        if is_float(label):
-            support = float(label)
-        elif label != '':
-            taxon = label
+        if ':' in label:
+            support, taxon = label.split(':')
+            support = float(support)
+        else:
+            if is_float(label):
+                support = float(label)
+            elif label != '':
+                taxon = label
 
     return support, taxon, auxiliary_info

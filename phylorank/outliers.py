@@ -715,6 +715,12 @@ class Outliers(AbstractPlot):
                                         taxa_for_dist_inference, 
                                         gtdb_parent_ranks, 
                                         median_outlier_table)
+                                        
+            # create scaled tree
+            rd.decorate_rel_dist(tree)
+            for n in tree.preorder_node_iter(lambda n: n != tree.seed_node):
+                rd_to_parent = n.rel_dist - n.parent_node.rel_dist
+                n.edge_length = rd_to_parent
         else:
             # report number of taxa at each rank
             print ''
@@ -730,9 +736,17 @@ class Outliers(AbstractPlot):
             
             phyla = [p for p in all_phyla if p in taxa_for_dist_inference]
             self.logger.info('Using %d phyla as rootings for inferring distributions.' % len(phyla))
+            if len(phyla) < 2:
+                self.logger.error('Rescaling requires at least 2 valid phyla.')
+                sys.exit(-1)
+                
+            # give each node a unique id
+            for i, n in enumerate(tree.preorder_node_iter()):
+                n.id = i
         
             # calculate outliers for tree rooted on each phylum
             phylum_rel_dists = {}
+            rel_node_dists = defaultdict(list)
             for p in phyla:
                 phylum = p.replace('p__', '').replace(' ', '_').lower()
                 self.logger.info('Calculating information with rooting on %s.' % phylum.capitalize())
@@ -748,7 +762,6 @@ class Outliers(AbstractPlot):
 
                 # calculate relative distance to taxa
                 rel_dists = rd.rel_dist_to_named_clades(cur_tree, taxa_to_plot)
-                
                 if not plot_domain:
                     rel_dists.pop(0, None)
 
@@ -773,7 +786,42 @@ class Outliers(AbstractPlot):
                                             taxa_for_dist_inference, 
                                             gtdb_parent_ranks,
                                             median_outlier_table)
+                                            
+                # calculate relative distance to all nodes
+                self.logger.info('Rescaling tree to reflect relative divergence.')
+                rd.decorate_rel_dist(cur_tree)
+                
+                # determine which lineages represents the 'ingroup'
+                ingroup_subtree = None
+                for c in cur_tree.seed_node.child_node_iter():
+                    _support, taxon_name, _auxiliary_info = parse_label(c.label)
+                    if not taxon_name or p not in taxon_name:
+                        ingroup_subtree = c
+                        break
+                
+                # do a preorder traversal of 'ingroup' and record relative divergence to nodes
+                for n in ingroup_subtree.preorder_iter():                        
+                    rd_to_parent = n.rel_dist - n.parent_node.rel_dist
+                    n.edge_length = rd_to_parent
+                    rel_node_dists[n.id].append(n.rel_dist)
 
+                cur_tree.write_to_path(os.path.join(phylum_dir, '%s.scaled.tree' % phylum), 
+                                        schema='newick', 
+                                        suppress_rooting=True, 
+                                        unquoted_underscores=True)
+                                            
+            # set edge lengths to median value over all rootings
+            tree.seed_node.rel_dist = 0.0
+            for n in tree.preorder_node_iter(lambda n: n != tree.seed_node):
+                n.rel_dist = np_median(rel_node_dists[n.id])
+                rd_to_parent = n.rel_dist - n.parent_node.rel_dist
+                if rd_to_parent < 0:
+                        print '*******************************************************really????'
+                        print n.rel_dist, n.parent_node.rel_dist
+                        print rel_node_dists[n.id]
+                        print rel_node_dists[n.parent_node.id]
+                n.edge_length = rd_to_parent
+                
             plot_file = os.path.join(output_dir, '%s.png' % input_tree_name)
             self._distribution_summary_plot(phylum_rel_dists, taxa_for_dist_inference, plot_file)
 
@@ -785,6 +833,14 @@ class Outliers(AbstractPlot):
                                                 median_outlier_table, 
                                                 median_rank_file, 
                                                 verbose_table)
+                                                
+        output_tree = os.path.join(output_dir, '%s.scaled.tree' % input_tree_name)
+        tree.write_to_path(output_tree, 
+                            schema='newick', 
+                            suppress_rooting=True, 
+                            unquoted_underscores=True)
+                                                
+                                     
 
     def scale(self, 
                 input_tree, 

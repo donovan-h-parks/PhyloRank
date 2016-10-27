@@ -26,6 +26,7 @@ from phylorank.newick import parse_label
 from phylorank.outliers import Outliers
 from phylorank.rd_ranks import RdRanks
 from phylorank.bl_dist import BranchLengthDistribution
+from phylorank.tree_diff import TreeDiff
 from phylorank.plot.robustness_plot import RobustnessPlot
 from phylorank.plot.distribution_plot import DistributionPlot
 
@@ -93,7 +94,23 @@ class OptionsParser():
                         options.min_support)
         
         self.logger.info('Done.')
-
+        
+    def tree_diff(self, options):
+        """Tree diff command."""
+        
+        check_file_exists(options.input_tree1)
+        check_file_exists(options.input_tree2)
+        
+        td = TreeDiff()
+        td.run(options.input_tree1,
+                options.input_tree2,
+                options.output_file,
+                options.min_support,
+                options.min_taxa,
+                options.named_only)
+        
+        self.logger.info('Done.')
+        
     def dist_plot(self, options):
         """Distribution plot command"""
 
@@ -417,6 +434,8 @@ class OptionsParser():
             self.decorate(options)
         elif(options.subparser_name == 'scale'):
             self.scale(options)
+        elif(options.subparser_name == 'tree_diff'):
+            self.tree_diff(options)
         elif(options.subparser_name == 'pull'):
             self.pull(options)
         elif(options.subparser_name == 'validate'):

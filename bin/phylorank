@@ -53,10 +53,11 @@ def print_help():
     print '                ...::: PhyloRank v' + version() + ' :::...'''
     print '''\
 
-  outliers    -> Create table and plot useful for identifying taxonomic outliers
+  outliers    -> Create table, scaled tree, and plot useful for identifying taxonomic outliers
   dist_plot   -> Plot distribution of taxa in each taxonomic rank
   decorate    -> Decorate nodes with distribution information and predicted taxonomic ranks
-  scale       -> Scale tree to reflect PhyloRank relative divergence 
+
+  tree_diff   -> Quantify bootstrap supported topological differences between trees
 
   pull        -> Pull taxonomy information from tree
   validate    -> Validate consistency of taxonomy
@@ -144,18 +145,30 @@ if __name__ == '__main__':
     outliers_parser.add_argument('--verbose_table', action="store_true", help='add additional columns to output table')
 
     # scale tree to reflect relative distances
-    scale_parser = subparsers.add_parser('scale',
-                                            formatter_class=CustomHelpFormatter,
-                                            description='Scale tree to reflect PhyloRank relative divergence.')
+    if False:
+        scale_parser = subparsers.add_parser('scale',
+                                                formatter_class=CustomHelpFormatter,
+                                                description='Scale tree to reflect PhyloRank relative divergence.')
 
-    scale_parser.add_argument('input_tree', help="input tree to decorate")
-    scale_parser.add_argument('output_dir', help="desired output directory for generated files")
-    scale_parser.add_argument('--fixed_root', action="store_true", help='use single fixed root for calculating relative divergence')
-    scale_parser.add_argument('-t', '--trusted_taxa_file', help="file indicating trusted taxonomic groups to use for inferring distribution (default: all taxa)", default=None)
-    scale_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa when inferring distribution', type=int, default=2)
-    scale_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa when inferring distribution (default: 0)", type=float, default=0.0)
-    scale_parser.add_argument('--taxonomy_file', help='read taxonomy from this file instead of directly from tree', default=None)
-    
+        scale_parser.add_argument('input_tree', help="input tree to decorate")
+        scale_parser.add_argument('output_dir', help="desired output directory for generated files")
+        scale_parser.add_argument('--fixed_root', action="store_true", help='use single fixed root for calculating relative divergence')
+        scale_parser.add_argument('-t', '--trusted_taxa_file', help="file indicating trusted taxonomic groups to use for inferring distribution (default: all taxa)", default=None)
+        scale_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa when inferring distribution', type=int, default=2)
+        scale_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa when inferring distribution (default: 0)", type=float, default=0.0)
+        scale_parser.add_argument('--taxonomy_file', help='read taxonomy from this file instead of directly from tree', default=None)
+        
+    # scale tree to reflect relative distances
+    tree_diff_parser = subparsers.add_parser('tree_diff',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Quantify bootstrap supported topological differences between trees.')
+
+    tree_diff_parser.add_argument('input_tree1', help="first input tree")
+    tree_diff_parser.add_argument('input_tree2', help="second input tree")
+    tree_diff_parser.add_argument('output_file', help="file summarizing differences between trees")
+    tree_diff_parser.add_argument('--min_support', help="minimum value to consider a lineage well supported", type=float, default=90.0)
+    tree_diff_parser.add_argument('--min_taxa', help="only consider lineage with sufficient number of taxa", type=int, default=2)
+    tree_diff_parser.add_argument('--named_only', action="store_true", help="only consider named lineages")
     
     # plot distribution of groups in each taxonomic rank
     dist_plot_parser = subparsers.add_parser('dist_plot',
