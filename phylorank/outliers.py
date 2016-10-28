@@ -150,10 +150,14 @@ class Outliers(AbstractPlot):
         self.fig.clear()
         self.fig.set_size_inches(12, 6)
         ax = self.fig.add_subplot(111)
-
+        
+        
         # create normal distributions
         for i, rank in enumerate(sorted(rel_dists.keys())):
             v = [dist for taxa, dist in rel_dists[rank].iteritems() if taxa in taxa_for_dist_inference]
+            if len(v) < 2:
+                continue
+                
             u = np_mean(v)
             rv = norm(loc=u, scale=np_std(v))
             x = np_linspace(rv.ppf(0.001), rv.ppf(0.999), 1000)
@@ -165,6 +169,9 @@ class Outliers(AbstractPlot):
         percentiles = {}
         for i, rank in enumerate(sorted(rel_dists.keys())):
             v = [dist for taxa, dist in rel_dists[rank].iteritems() if taxa in taxa_for_dist_inference]
+            if len(v) == 0:
+                continue
+                
             p10, p50, p90 = np_percentile(v, [10, 50, 90])
             ax.plot((p10, p10), (i, i + 0.25), c=(0.3, 0.3, 0.3), lw=2, zorder=2)
             ax.plot((p50, p50), (i, i + 0.5), c=(0.3, 0.3, 0.3), lw=2, zorder=2)
@@ -181,6 +188,7 @@ class Outliers(AbstractPlot):
 
             percentiles[i] = [p10, p50, p90]
 
+    
         # create scatter plot and results table
         fout = open(distribution_table, 'w')
         fout.write('Taxa\tRelative Distance\tP10\tMedian\tP90\tPercentile outlier\n')
@@ -213,11 +221,16 @@ class Outliers(AbstractPlot):
                     c.append((0.0, 0.0, 1.0))
                     mono.append(dist)
             
-                p10, p50, p90 = percentiles[i]
-                percentile_outlier = not (dist >= p10 and dist <= p90)
-
+                # report results
                 v = [clade_label, dist]
-                v += percentiles[i] + [str(percentile_outlier)]
+                if i in percentiles:
+                    p10, p50, p90 = percentiles[i]
+                    percentile_outlier = not (dist >= p10 and dist <= p90)
+                    v += percentiles[i] + [str(percentile_outlier)]
+                else:
+                    percentile_outlier = 'Insufficent data to calculate percentiles'
+                    v += [-1,-1,-1] + [str(percentile_outlier)]
+                
                 fout.write('%s\t%.2f\t%.2f\t%.2f\t%.2f\t%s\n' % tuple(v))
         
             # histogram for each rank
@@ -227,17 +240,19 @@ class Outliers(AbstractPlot):
             binwidth = 0.025
             bins = np_arange(0, 1.0 + binwidth, binwidth)
 
-            mono_max_count = max(np_histogram(mono, bins=bins)[0])
-            mono_weights = np_ones_like(mono) * (1.0 / mono_max_count)
-
             w = float(len(mono)) / (len(mono) + len(poly) + len(no_inference))
-            n, b, p = ax.hist(mono, bins=bins,
-                      color=(0.0, 0.0, 1.0),
-                      alpha=0.25,
-                      weights=0.9 * w * mono_weights,
-                      bottom=i,
-                      lw=0,
-                      zorder=0)
+            n = 0
+            if len(mono) > 0:
+                mono_max_count = max(np_histogram(mono, bins=bins)[0])
+                mono_weights = np_ones_like(mono) * (1.0 / mono_max_count)
+
+                n, b, p = ax.hist(mono, bins=bins,
+                          color=(0.0, 0.0, 1.0),
+                          alpha=0.25,
+                          weights=0.9 * w * mono_weights,
+                          bottom=i,
+                          lw=0,
+                          zorder=0)
                       
             if len(no_inference) > 0:
                 no_inference_max_count = max(np_histogram(no_inference, bins=bins)[0])
@@ -265,6 +280,7 @@ class Outliers(AbstractPlot):
                           
         fout.close()
 
+    
         # overlay scatter plot elements
         scatter = ax.scatter(x, y, alpha=0.5, s=48, c=c, zorder=1)
 
@@ -314,6 +330,9 @@ class Outliers(AbstractPlot):
         median_rel_dist = {}
         for rank, d in rel_dists.iteritems():
             v = [dist for taxa, dist in d.iteritems() if taxa in taxa_for_dist_inference]
+            if len(v) == 0:
+                continue
+                
             median_rel_dist[rank] = np_median(v)
 
         fout = open(output_file, 'w')
@@ -321,31 +340,38 @@ class Outliers(AbstractPlot):
             
         for i, rank in enumerate(sorted(rel_dists.keys())):
             for clade_label, dist in rel_dists[rank].iteritems():
-                delta = dist - median_rel_dist[rank]
+                if rank in median_rel_dist:
+                    delta = dist - median_rel_dist[rank]
+                    closest_rank_dist = 1e10
+                    for test_rank, test_median in median_rel_dist.iteritems():
+                        abs_dist = abs(dist - test_median)
+                        if abs_dist < closest_rank_dist:
+                            closest_rank_dist = abs_dist
+                            closest_rank = Taxonomy.rank_labels[test_rank]
 
-                closest_rank_dist = 1e10
-                for test_rank, test_median in median_rel_dist.iteritems():
-                    abs_dist = abs(dist - test_median)
-                    if abs_dist < closest_rank_dist:
-                        closest_rank_dist = abs_dist
-                        closest_rank = Taxonomy.rank_labels[test_rank]
+                    classification = "OK"
+                    if delta < -0.2:
+                        classification = "very overclassified"
+                    elif delta < -0.1:
+                        classification = "overclassified"
+                    elif delta > 0.2:
+                        classification = "very underclassified"
+                    elif delta > 0.1:
+                        classification = "underclassified"
 
-                classification = "OK"
-                if delta < -0.2:
-                    classification = "very overclassified"
-                elif delta < -0.1:
-                    classification = "overclassified"
-                elif delta > 0.2:
-                    classification = "very underclassified"
-                elif delta > 0.1:
-                    classification = "underclassified"
-
-                fout.write('%s\t%s\t%.3f\t%.3f\t%s\t%s\n' % (clade_label,
-                                                               ';'.join(gtdb_parent_ranks[clade_label]),
-                                                               dist,
-                                                               delta,
-                                                               closest_rank,
-                                                               classification))
+                    fout.write('%s\t%s\t%.3f\t%.3f\t%s\t%s\n' % (clade_label,
+                                                                   ';'.join(gtdb_parent_ranks[clade_label]),
+                                                                   dist,
+                                                                   delta,
+                                                                   closest_rank,
+                                                                   classification))
+                else:
+                    fout.write('%s\t%s\t%.3f\t%.3f\t%s\t%s\n' % (clade_label,
+                                                                   ';'.join(gtdb_parent_ranks[clade_label]),
+                                                                   dist,
+                                                                   -1,
+                                                                   'NA',
+                                                                   'Insufficent data to calcualte median for rank.'))
         fout.close()
 
     def _distribution_summary_plot(self, phylum_rel_dists, taxa_for_dist_inference, plot_file):
@@ -838,9 +864,7 @@ class Outliers(AbstractPlot):
         tree.write_to_path(output_tree, 
                             schema='newick', 
                             suppress_rooting=True, 
-                            unquoted_underscores=True)
-                                                
-                                     
+                            unquoted_underscores=True)                
 
     def scale(self, 
                 input_tree, 
