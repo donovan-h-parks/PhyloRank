@@ -58,6 +58,7 @@ def print_help():
   decorate    -> Decorate nodes with distribution information and predicted taxonomic ranks
 
   tree_diff   -> Quantify bootstrap supported topological differences between trees
+  tax_diff    -> Tabulate differences between two taxonomies
 
   pull        -> Pull taxonomy information from tree
   validate    -> Validate consistency of taxonomy
@@ -158,17 +159,26 @@ if __name__ == '__main__':
         scale_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa when inferring distribution (default: 0)", type=float, default=0.0)
         scale_parser.add_argument('--taxonomy_file', help='read taxonomy from this file instead of directly from tree', default=None)
         
-    # scale tree to reflect relative distances
+    # quanitify differences between two trees
     tree_diff_parser = subparsers.add_parser('tree_diff',
                                             formatter_class=CustomHelpFormatter,
                                             description='Quantify bootstrap supported topological differences between trees.')
 
-    tree_diff_parser.add_argument('input_tree1', help="first input tree")
-    tree_diff_parser.add_argument('input_tree2', help="second input tree")
+    tree_diff_parser.add_argument('input_tree1', help="first decorated input tree")
+    tree_diff_parser.add_argument('input_tree2', help="second decorated input tree")
     tree_diff_parser.add_argument('output_file', help="file summarizing differences between trees")
     tree_diff_parser.add_argument('--min_support', help="minimum value to consider a lineage well supported", type=float, default=90.0)
     tree_diff_parser.add_argument('--min_taxa', help="only consider lineage with sufficient number of taxa", type=int, default=2)
     tree_diff_parser.add_argument('--named_only', action="store_true", help="only consider named lineages")
+    
+    # tabulate differences between two taxonomies
+    tax_diff_parser = subparsers.add_parser('tax_diff',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Tabulate differences between two taxonomies.')
+
+    tax_diff_parser.add_argument('input_tree1', help="first decorated input tree")
+    tax_diff_parser.add_argument('input_tree2', help="second decorated input tree")
+    tax_diff_parser.add_argument('output_dir', help="output directory")
     
     # plot distribution of groups in each taxonomic rank
     dist_plot_parser = subparsers.add_parser('dist_plot',
@@ -279,6 +289,9 @@ if __name__ == '__main__':
     bl_optimal_parser.add_argument('input_tree', help="input tree to calculate branch length distributions")
     bl_optimal_parser.add_argument('rank', help="rank of labels", type=int, choices=[1, 2, 3, 4, 5, 6])
     bl_optimal_parser.add_argument('output_table', help="desired named of output table")
+    bl_optimal_parser.add_argument('--min_dist', help='minimum mean branch length value to evaluate', type=float, default=0.5)
+    bl_optimal_parser.add_argument('--max_dist', help='maximum mean branch length value to evaluate', type=float, default=1.2)
+    bl_optimal_parser.add_argument('--step_size', help='step size of mean branch length values', type=float, default=0.025)
     
     bl_decorate_parser = subparsers.add_parser('bl_decorate',
                                             formatter_class=CustomHelpFormatter,

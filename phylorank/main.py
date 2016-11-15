@@ -27,6 +27,7 @@ from phylorank.outliers import Outliers
 from phylorank.rd_ranks import RdRanks
 from phylorank.bl_dist import BranchLengthDistribution
 from phylorank.tree_diff import TreeDiff
+from phylorank.tax_diff import TaxDiff
 from phylorank.plot.robustness_plot import RobustnessPlot
 from phylorank.plot.distribution_plot import DistributionPlot
 
@@ -108,6 +109,22 @@ class OptionsParser():
                 options.min_support,
                 options.min_taxa,
                 options.named_only)
+        
+        self.logger.info('Done.')
+        
+    def tax_diff(self, options):
+        """Taxonomy difference command."""
+        
+        check_file_exists(options.input_tree1)
+        check_file_exists(options.input_tree2)
+        
+        if not os.path.exists(options.output_dir):
+            os.makedirs(options.output_dir)
+        
+        td = TaxDiff()
+        td.run(options.input_tree1,
+                options.input_tree2,
+                options.output_dir)
         
         self.logger.info('Done.')
         
@@ -316,6 +333,9 @@ class OptionsParser():
         b = BranchLengthDistribution()
         optimal_bl, correct_taxa, incorrect_taxa = b.optimal(options.input_tree, 
                                                                 options.rank,
+                                                                options.min_dist,
+                                                                options.max_dist,
+                                                                options.step_size,
                                                                 options.output_table)
         
         prec = float(correct_taxa) / (correct_taxa + incorrect_taxa)
@@ -362,6 +382,7 @@ class OptionsParser():
         
         if options.taxa_file:
             taxa_out = open(options.taxa_file, 'w')
+            taxa_out.write('Rank\tLowest Rank\tTaxon\n')
 
         # determine taxonomic resolution of named groups
         tree = dendropy.Tree.get_from_path(options.input_tree, 
@@ -382,11 +403,14 @@ class OptionsParser():
                     if rank_prefix in taxon_name:
                         rank_res[rank_prefix][lowest_rank] += 1
                         if options.taxa_file:
-                            taxa_out.write('%s\t%s\t%s\n' % (rank_prefix, lowest_rank, taxon_name))
+                            rank_prefix_name = Taxonomy.rank_labels[Taxonomy.rank_index[rank_prefix]]
+                            lowest_rank_name = Taxonomy.rank_labels[Taxonomy.rank_index[lowest_rank]]
+                            taxa_out.write('%s\t%s\t%s\n' % (rank_prefix_name, lowest_rank_name, taxon_name))
 
         # identify any singleton taxa which are treated as having species level resolution
         for line in open(options.taxonomy_file):
             line_split = line.split('\t')
+            genome_id = line_split[0]
             taxonomy = line_split[1].split(';')
             
             for i, rank_prefix in enumerate(Taxonomy.rank_prefixes):
@@ -396,8 +420,8 @@ class OptionsParser():
                     # indicates a taxon that represents a novel phyla
                     rank_res[rank_prefix]['s__'] += 1
                     if options.taxa_file:
-                        taxa_out.write('%s\t%s\t%s\n' % (rank_prefix, 's__', taxonomy[i]))
-                    
+                        rank_prefix_name = Taxonomy.rank_labels[Taxonomy.rank_index[rank_prefix]]
+                        taxa_out.write('%s\t%s\t%s (%s)\n' % (rank_prefix_name, 'species', taxonomy[i], genome_id))                   
         if options.taxa_file:
             taxa_out.close()
                       
@@ -436,6 +460,8 @@ class OptionsParser():
             self.scale(options)
         elif(options.subparser_name == 'tree_diff'):
             self.tree_diff(options)
+        elif(options.subparser_name == 'tax_diff'):
+            self.tax_diff(options)
         elif(options.subparser_name == 'pull'):
             self.pull(options)
         elif(options.subparser_name == 'validate'):
