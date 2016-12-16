@@ -31,8 +31,8 @@ To do:
 '''
 
 
-class DecorateTree():
-    """Decorate nodes with taxonomic ranks inferred from evolutionary divergence."""
+class MarkTree():
+    """Mark nodes with taxonomic ranks inferred from evolutionary divergence."""
 
     def __init__(self):
         """Initialization."""

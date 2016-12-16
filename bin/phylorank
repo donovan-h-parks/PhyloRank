@@ -53,28 +53,31 @@ def print_help():
     print '                ...::: PhyloRank v' + version() + ' :::...'''
     print '''\
 
-  outliers    -> Create table, scaled tree, and plot useful for identifying taxonomic outliers
-  dist_plot   -> Plot distribution of taxa in each taxonomic rank
-  decorate    -> Decorate nodes with distribution information and predicted taxonomic ranks
+  Curation methods:
+    outliers    -> Create table, scaled tree, and plot useful for identifying taxonomic outliers
+    dist_plot   -> Plot distribution of taxa in each taxonomic rank
+    mark_tree   -> Mark nodes with distribution information and predicted taxonomic ranks
+    rd_ranks    -> Calculate number of taxa for specified rd thresholds
 
-  tree_diff   -> Quantify bootstrap supported topological differences between trees
-  tax_diff    -> Tabulate differences between two taxonomies
+  Taxonomy comparison methods:
+    tree_diff     -> Quantify bootstrap supported topological differences between trees
+    tree_tax_diff -> Tabulate differences between two taxonomies on a tree
+    tax_diff      -> Tabulate differences between two taxonomies
 
-  pull        -> Pull taxonomy information from tree
-  validate    -> Validate consistency of taxonomy
-  append      -> Append taxonomy to extant tree labels
-  taxon_stats -> Summary statistics of taxonomic groups
+  Taxonomy decoration, verification, inspection methods
+    decorate    -> Place internal taxonomic labels on tree
+    append      -> Append taxonomy to extant tree labels
+    pull        -> Pull taxonomy information from tree
+    validate    -> Validate consistency of taxonomy
+    taxon_stats -> Summary statistics of taxonomic groups
+    rank_res    -> Calculate taxonomic resolution at each rank
+
+  Mean branch length to extant taxa methods:
+    bl_dist     -> Calculate distribution of branch lengths at each taxonomic rank
+    bl_optimal  -> Determine branch length for best congruency with existing taxonomy
+    bl_decorate -> Decorate tree using a mean branch length criterion
+    bl_table    -> Produce table with number of lineage for increasing mean branch lengths
   
-  rd_ranks    -> Calculate number of taxa for specified rd thresholds
-  
-  bl_dist     -> Calculate distribution of branch lengths at each taxonomic rank
-  bl_optimal  -> Determine branch length for best congruency with existing taxonomy
-  bl_decorate -> Decorate tree using a mean branch length criterion
-  bl_table    -> Produce table with number of lineage for increasing mean branch lengths
-  
-  rank_res    -> Calculate taxonomic resolution at each rank
-
-
   [Expert commands: hide these at some point]
 
   robustness_plot -> Plot relative distance of groups across a set of trees.
@@ -144,21 +147,7 @@ if __name__ == '__main__':
     outliers_parser.add_argument('--plot_dist_taxa_only', help='only plot taxa used to infer distribution', action="store_true")
     outliers_parser.add_argument('--dpi', help='DPI of plots', type=int, default=96)
     outliers_parser.add_argument('--verbose_table', action="store_true", help='add additional columns to output table')
-
-    # scale tree to reflect relative distances
-    if False:
-        scale_parser = subparsers.add_parser('scale',
-                                                formatter_class=CustomHelpFormatter,
-                                                description='Scale tree to reflect PhyloRank relative divergence.')
-
-        scale_parser.add_argument('input_tree', help="input tree to decorate")
-        scale_parser.add_argument('output_dir', help="desired output directory for generated files")
-        scale_parser.add_argument('--fixed_root', action="store_true", help='use single fixed root for calculating relative divergence')
-        scale_parser.add_argument('-t', '--trusted_taxa_file', help="file indicating trusted taxonomic groups to use for inferring distribution (default: all taxa)", default=None)
-        scale_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa when inferring distribution', type=int, default=2)
-        scale_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa when inferring distribution (default: 0)", type=float, default=0.0)
-        scale_parser.add_argument('--taxonomy_file', help='read taxonomy from this file instead of directly from tree', default=None)
-        
+   
     # quanitify differences between two trees
     tree_diff_parser = subparsers.add_parser('tree_diff',
                                             formatter_class=CustomHelpFormatter,
@@ -166,19 +155,29 @@ if __name__ == '__main__':
 
     tree_diff_parser.add_argument('input_tree1', help="first decorated input tree")
     tree_diff_parser.add_argument('input_tree2', help="second decorated input tree")
-    tree_diff_parser.add_argument('output_file', help="file summarizing differences between trees")
+    tree_diff_parser.add_argument('output_dir', help="file summarizing differences between trees")
     tree_diff_parser.add_argument('--min_support', help="minimum value to consider a lineage well supported", type=float, default=90.0)
     tree_diff_parser.add_argument('--min_taxa', help="only consider lineage with sufficient number of taxa", type=int, default=2)
     tree_diff_parser.add_argument('--named_only', action="store_true", help="only consider named lineages")
+    
+    # tabulate differences between two taxonomies
+    tree_tax_diff_parser = subparsers.add_parser('tree_tax_diff',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Tabulate differences between two taxonomies on a tree.')
+
+    tree_tax_diff_parser.add_argument('input_tree1', help="first decorated input tree")
+    tree_tax_diff_parser.add_argument('input_tree2', help="second decorated input tree")
+    tree_tax_diff_parser.add_argument('output_dir', help="output directory")
     
     # tabulate differences between two taxonomies
     tax_diff_parser = subparsers.add_parser('tax_diff',
                                             formatter_class=CustomHelpFormatter,
                                             description='Tabulate differences between two taxonomies.')
 
-    tax_diff_parser.add_argument('input_tree1', help="first decorated input tree")
-    tax_diff_parser.add_argument('input_tree2', help="second decorated input tree")
+    tax_diff_parser.add_argument('tax1_file', help="first taxonomy file")
+    tax_diff_parser.add_argument('tax2_file', help="second taxonomy file")
     tax_diff_parser.add_argument('output_dir', help="output directory")
+    tax_diff_parser.add_argument('--include_user_taxa', action="store_true", help="specifies that User genomes should also be considered")
     
     # plot distribution of groups in each taxonomic rank
     dist_plot_parser = subparsers.add_parser('dist_plot',
@@ -196,21 +195,33 @@ if __name__ == '__main__':
 
     # ******** MAYBE THIS SHOULD JUST TAKE A 'DISTRIBUTIONS FILE' produce by 'dist_plot'
     #************************************************************************************
-    decorate_parser = subparsers.add_parser('decorate',
+    mark_tree_parser = subparsers.add_parser('mark_tree',
                                             formatter_class=CustomHelpFormatter,
-                                            description='Decorate nodes with distribution information and predicted taxonomic ranks.')
+                                            description='Mark nodes with distribution information and predicted taxonomic ranks.')
 
-    decorate_parser.add_argument('input_tree', help="input tree to decorate")
-    decorate_parser.add_argument('output_tree', help="output tree with assigned taxonomic ranks")
-    decorate_parser.add_argument('-t', '--thresholds', help="relative divergence thresholds for taxonomic ranks", type=json.loads,
+    mark_tree_parser.add_argument('input_tree', help="input tree to mark")
+    mark_tree_parser.add_argument('output_tree', help="output tree with assigned taxonomic ranks")
+    mark_tree_parser.add_argument('-t', '--thresholds', help="relative divergence thresholds for taxonomic ranks", type=json.loads,
                                     default='{"d": 0.33, "p": 0.56, "c": 0.65, "o": 0.78, "f": 0.92, "g": 0.99}')
-    decorate_parser.add_argument('-s', '--min_support', help="only decorate nodes above the specified support value (default=0)", type=float, default=0)
-    decorate_parser.add_argument('-n', '--only_named_clades', help="only decorate nodes with an existing label", action='store_true')
-    decorate_parser.add_argument('-l', '--min_length', help="only decorate nodes with a parent branch above the specified length (default=0)", type=float, default=0.0)
-    decorate_parser.add_argument('--no_percentile', action="store_true", help="do not decorate with percentile information")
-    decorate_parser.add_argument('--no_relative_divergence', action="store_true", help="do not decorate with relative divergence information")
-    decorate_parser.add_argument('--no_prediction', action="store_true", help="do not decorate with predicted rank information")
+    mark_tree_parser.add_argument('-s', '--min_support', help="only mark nodes above the specified support value (default=0)", type=float, default=0)
+    mark_tree_parser.add_argument('-n', '--only_named_clades', help="only mark nodes with an existing label", action='store_true')
+    mark_tree_parser.add_argument('-l', '--min_length', help="only mark nodes with a parent branch above the specified length (default=0)", type=float, default=0.0)
+    mark_tree_parser.add_argument('--no_percentile', action="store_true", help="do not mark with percentile information")
+    mark_tree_parser.add_argument('--no_relative_divergence', action="store_true", help="do not mark with relative divergence information")
+    mark_tree_parser.add_argument('--no_prediction', action="store_true", help="do not mark with predicted rank information")
 
+    # decorate ree
+    decorate_parser = subparsers.add_parser('decorate',
+                                        formatter_class=CustomHelpFormatter,
+                                        description='Place internal taxonomic labels on tree.')
+    decorate_parser.add_argument('input_tree', help='tree to decorate')
+    decorate_parser.add_argument('taxonomy_file', help='file indicating taxonomy of extant taxa')
+    decorate_parser.add_argument('output_tree', help='decorated tree')
+    decorate_parser.add_argument('-t', '--trusted_taxa_file', help="file indicating trusted taxonomic groups to use for inferring distribution (default: all taxa)", default=None)
+    decorate_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa when inferring distribution', type=int, default=2)
+    decorate_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa when inferring distribution (default: 0)", type=float, default=0.0)
+    decorate_parser.add_argument('--silent', help="suppress output", action='store_true')
+    
     # pull taxonomy strings from tree
     pull_parser = subparsers.add_parser('pull',
                                             formatter_class=CustomHelpFormatter,

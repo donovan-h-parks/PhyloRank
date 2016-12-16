@@ -115,7 +115,7 @@ class Outliers(AbstractPlot):
         if len(mrca.leaf_nodes()) != len(outgroup_in_tree):
             self.logger.info('Outgroup is not monophyletic. Tree will be rerooted at the MRCA of the outgroup.')
             self.logger.info('The outgroup consisted of %d taxa, while the MRCA has %d leaf nodes.' % (len(outgroup_in_tree), len(mrca.leaf_nodes())))
-            if len(mrca.leaf_nodes()) == len(tree.leaf_nodes()):
+            if len(mrca.leaf_nodes()) == len(new_tree.leaf_nodes()):
                 self.logger.warning('The MRCA spans all taxa in the tree.')
                 self.logger.warning('This indicating the selected outgroup is likely polyphyletic in the current tree.')
                 self.logger.warning('Polyphyletic outgroups are not suitable for rooting. Try another outgroup.')
@@ -373,7 +373,44 @@ class Outliers(AbstractPlot):
                                                                    'NA',
                                                                    'Insufficent data to calcualte median for rank.'))
         fout.close()
-
+        
+    def taxa_median_rd(self, phylum_rel_dists):
+        """Calculate the median relative divergence for each taxon.
+        
+        Parameters
+        ----------
+        phylum_rel_dists: phylum_rel_dists[phylum][rank_index][taxon] -> relative divergences
+            Relative divergence of taxon at each rank for different phylum-level rootings.    
+        """
+        
+        medians_for_taxa = defaultdict(lambda: defaultdict(list))
+        for p in phylum_rel_dists:
+            for rank, d in phylum_rel_dists[p].iteritems():
+                for taxon, dist in d.iteritems():
+                    medians_for_taxa[rank][taxon].append(dist)
+                    
+        return medians_for_taxa
+        
+    def rank_median_rd(self, phylum_rel_dists, taxa_for_dist_inference):
+        """Calculate median relative divergence for each rank.
+        
+        Parameters
+        ----------
+        phylum_rel_dists: phylum_rel_dists[phylum][rank_index][taxon] -> relative divergences
+            Relative divergence of taxon at each rank for different phylum-level rootings.
+        taxa_for_dist_inference : iterable
+            Taxa to considered when inferring distributions.
+        """
+        
+        medians_for_taxa = self.taxa_median_rd(phylum_rel_dists)
+    
+        median_for_rank = {}
+        for i, rank in enumerate(sorted(medians_for_taxa.keys())):
+                v = [np_median(dists) for taxon, dists in medians_for_taxa[rank].iteritems() if taxon in taxa_for_dist_inference]
+                median_for_rank[rank] = np_median(v)
+                
+        return median_for_rank
+        
     def _distribution_summary_plot(self, phylum_rel_dists, taxa_for_dist_inference, plot_file):
         """Summary plot showing the distribution of taxa at each taxonomic rank under different rootings.
 
@@ -392,21 +429,7 @@ class Outliers(AbstractPlot):
         ax = self.fig.add_subplot(111)
 
         # determine median relative distance for each taxa
-        medians_for_taxa = defaultdict(lambda: defaultdict(list))
-        for p in phylum_rel_dists:
-            for rank, d in phylum_rel_dists[p].iteritems():
-                for taxon, dist in d.iteritems():
-                    medians_for_taxa[rank][taxon].append(dist)
-
-        # create normal distributions
-        for i, rank in enumerate(sorted(medians_for_taxa.keys())):
-            v = [np_median(dists) for taxon, dists in medians_for_taxa[rank].iteritems() if taxon in taxa_for_dist_inference]
-            u = np_mean(v)
-            rv = norm(loc=u, scale=np_std(v))
-            x = np_linspace(rv.ppf(0.001), rv.ppf(0.999), 1000)
-            nd = rv.pdf(x)
-            # ax.plot(x, 0.75 * (nd / max(nd)) + i, 'b-', alpha=0.6, zorder=2)
-            # ax.plot((u, u), (i, i + 0.5), 'b-', zorder=2)
+        medians_for_taxa = self.taxa_median_rd(phylum_rel_dists)
 
         # create percentile and classification boundary lines
         percentiles = {}
@@ -550,56 +573,37 @@ class Outliers(AbstractPlot):
         verbose_table : boolean
             Print additional columns in output table.
         """
+        
+        # determine median relative distance for each taxa
+        medians_for_taxa = self.taxa_median_rd(phylum_rel_dists)
 
-        # determine median relative distance for each rank abd taxa
-        median_for_phyla = defaultdict(list)
-        medians_for_taxa = defaultdict(lambda: defaultdict(list))
-        dist_per_phyla = defaultdict(lambda: defaultdict(list))
-        for p in phylum_rel_dists:
-            for rank, d in phylum_rel_dists[p].iteritems():
-                v = [dist for taxon, dist in d.iteritems() if taxon in taxa_for_dist_inference]
-                phylum_median = np_median(v)
-                median_for_phyla[rank].append(phylum_median)
-
-                for taxon, dist in d.iteritems():
-                    medians_for_taxa[rank][taxon].append(dist)
-                    dist_per_phyla[rank][taxon].append(dist - phylum_median)
-
-        median = {}
-        mad = {}
-        for r, m in median_for_phyla.iteritems():
-            m = np_array(m)
-            median[r] = np_median(m)
-            mad[r] = np_median(np_abs(m - median[r]))
-            
+        # determine median relative distance for each rank
+        median_for_rank = self.rank_median_rd(phylum_rel_dists, taxa_for_dist_inference)
+          
         fout_rank = open(rank_file, 'w')
         median_str = []
-        for rank_index in sorted(median.keys()):
-            median_str.append('"' + Taxonomy.rank_prefixes[rank_index][0] + '":' + str(median[rank_index]))
+        for rank in sorted(median_for_rank.keys()):
+            median_str.append('"' + Taxonomy.rank_labels[rank] + '":' + str(median_for_rank[rank]))
         fout_rank.write('{' + ','.join(median_str) + '}\n')
         fout_rank.close()
             
         fout = open(outlier_table, 'w')
         if verbose_table:
-            fout.write('Taxa\tGTDB taxonomy\tMedian distance\tMedian absolute difference')
-            fout.write('\tMedian of rank\tMedian absolute difference\tDistance between medians')
-            fout.write('\tClosest rank\tClassifciation\tMean absolute difference\tMean difference\tDistance to rank median\n')
+            fout.write('Taxa\tGTDB taxonomy\tMedian distance')
+            fout.write('\tMedian of rank\tMedian difference')
+            fout.write('\tClosest rank\tClassifciation\n')
         else:
-            fout.write('Taxa\tGTDB taxonomy\tMedian distance\tMean difference\tClosest rank\tClassification\n')
+            fout.write('Taxa\tGTDB taxonomy\tMedian distance\tMedian difference\tClosest rank\tClassification\n')
         
-        for rank in sorted(median.keys()):
+        for rank in sorted(median_for_rank.keys()):
             for clade_label, dists in medians_for_taxa[rank].iteritems():
                 dists = np_array(dists)
 
-                mean_abs_dist = np_mean(np_abs(dist_per_phyla[rank][clade_label]))
-                mean_dist = np_mean(dist_per_phyla[rank][clade_label])
-
                 taxon_median = np_median(dists)
-                taxon_mad = np_median(np_abs(dists - taxon_median))
-                delta = taxon_median - median[rank]
+                delta = taxon_median - median_for_rank[rank]
 
                 closest_rank_dist = 1e10
-                for test_rank, test_median in median.iteritems():
+                for test_rank, test_median in median_for_rank.iteritems():
                     abs_dist = abs(taxon_median - test_median)
                     if abs_dist < closest_rank_dist:
                         closest_rank_dist = abs_dist
@@ -615,33 +619,118 @@ class Outliers(AbstractPlot):
                 elif delta > 0.1:
                     classification = "underclassified"
 
-                diff_str = []
-                for d in dist_per_phyla[rank][clade_label]:
-                    diff_str.append('%.2f' % d)
-                diff_str = ', '.join(diff_str)
-
                 if verbose_table:
-                    fout.write('%s\t%s\t%.2f\t%.3f\t%.3f\t%.3f\t%.3f\t%s\t%s\t%.3f\t%.3f\t%s\n' % (clade_label,
-                                                                                                   ';'.join(gtdb_parent_ranks[clade_label]),
-                                                                                                   taxon_median,
-                                                                                                   taxon_mad,
-                                                                                                   median[rank],
-                                                                                                   mad[rank],
-                                                                                                   delta,
-                                                                                                   closest_rank,
-                                                                                                   classification,
-                                                                                                   mean_abs_dist,
-                                                                                                   mean_dist,
-                                                                                                   diff_str))
+                    fout.write('%s\t%s\t%.2f\t%.3f\t%.3f\t%s\t%s\n' % (clade_label,
+                                                                       ';'.join(gtdb_parent_ranks[clade_label]),
+                                                                       taxon_median,
+                                                                       median_for_rank[rank],
+                                                                       delta,
+                                                                       closest_rank,
+                                                                       classification))
                 else:
                     fout.write('%s\t%s\t%.3f\t%.3f\t%s\t%s\n' % (clade_label,
                                                                    ';'.join(gtdb_parent_ranks[clade_label]),
                                                                    taxon_median,
-                                                                   mean_dist,
+                                                                   delta,
                                                                    closest_rank,
                                                                    classification))
         fout.close()
 
+    def rd_fixed_root(self, tree, taxa_for_dist_inference):
+        """Scale tree and calculate relative divergence over a single fixed root.
+        
+        Parameters
+        ----------
+        tree : Tree
+          Dendropy tree.
+        taxa_for_dist_inference : set
+          Taxa to use for inference relative divergence distributions.
+        """
+        
+        # calculate relative distance to taxa
+        rd = RelativeDistance()
+        rel_dists = rd.rel_dist_to_named_clades(tree)
+        
+        # create scaled tree
+        rd.decorate_rel_dist(tree)
+        for n in tree.preorder_node_iter(lambda n: n != tree.seed_node):
+            rd_to_parent = n.rel_dist - n.parent_node.rel_dist
+            n.edge_length = rd_to_parent
+        
+        return rel_dists
+
+    def median_rd_over_phyla(self, 
+                                tree, 
+                                taxa_for_dist_inference,
+                                taxonomy):
+        """Calculate the median relative divergence over all phyla rootings.
+        
+        Parameters
+        ----------
+        tree : Tree
+          Dendropy tree.
+        taxa_for_dist_inference : set
+          Taxa to use for inference relative divergence distributions.
+        taxonomy : d[taxon_id] -> [d__, p__, ..., s__]
+          Taxonomy of extant taxa.
+        """
+    
+        # get list of phyla level lineages
+        all_phyla = get_phyla_lineages(tree)
+        self.logger.info('Identified %d phyla.' % len(all_phyla))
+        
+        phyla = [p for p in all_phyla if p in taxa_for_dist_inference]
+        self.logger.info('Using %d phyla as rootings for inferring distributions.' % len(phyla))
+        if len(phyla) < 2:
+            self.logger.error('Rescaling requires at least 2 valid phyla.')
+            sys.exit(-1)
+            
+        # give each node a unique id
+        for i, n in enumerate(tree.preorder_node_iter()):
+            n.id = i
+    
+        # calculate relative divergence for tree rooted on each phylum
+        phylum_rel_dists = {}
+        rel_node_dists = defaultdict(list)
+        rd = RelativeDistance()
+        for p in phyla:
+            phylum = p.replace('p__', '').replace(' ', '_').lower()
+            self.logger.info('Calculating information with rooting on %s.' % phylum.capitalize())
+            
+            cur_tree = self.root_with_outgroup(tree, taxonomy, p)
+            
+            # calculate relative distance to taxa
+            rel_dists = rd.rel_dist_to_named_clades(cur_tree)
+            rel_dists.pop(0, None) # remove results for Domain
+
+            # remove named groups in outgroup
+            children = Taxonomy().children(p, taxonomy)
+            for r in rel_dists.keys():
+                rel_dists[r].pop(p, None)
+
+            for t in children:
+                for r in rel_dists.keys():
+                    rel_dists[r].pop(t, None)
+
+            phylum_rel_dists[phylum] = rel_dists
+            
+            # calculate relative distance to all nodes')
+            rd.decorate_rel_dist(cur_tree)
+            
+            # determine which lineages represents the 'ingroup'
+            ingroup_subtree = None
+            for c in cur_tree.seed_node.child_node_iter():
+                _support, taxon_name, _auxiliary_info = parse_label(c.label)
+                if not taxon_name or p not in taxon_name:
+                    ingroup_subtree = c
+                    break
+            
+            # do a preorder traversal of 'ingroup' and record relative divergence to nodes
+            for n in ingroup_subtree.preorder_iter():                        
+                rel_node_dists[n.id].append(n.rel_dist)
+                                                           
+        return phylum_rel_dists, rel_node_dists
+        
     def run(self, input_tree, 
                     taxonomy_file, 
                     output_dir, 
@@ -658,32 +747,28 @@ class Outliers(AbstractPlot):
         Parameters
         ----------
         input_tree : str
-            Name of input tree.
+          Name of input tree.
         taxonomy_file : str
-            File with taxonomy strings for each taxa.
+          File with taxonomy strings for each taxa.
         output_dir : str
-            Desired output directory.
+          Desired output directory.
         plot_taxa_file : str
-            File specifying taxa to plot. Set to None to consider all taxa.
+          File specifying taxa to plot. Set to None to consider all taxa.
         plot_dist_taxa_only : boolean    
-            Only plot the taxa used to infer distribution.
+          Only plot the taxa used to infer distribution.
         plot_domain : boolean
-            Plot domain rank.
+          Plot domain rank.
         trusted_taxa_file : str
-            File specifying trusted taxa to consider when inferring distribution. Set to None to consider all taxa.
+          File specifying trusted taxa to consider when inferring distribution. Set to None to consider all taxa.
         fixed_root : boolean
-            Usa a single fixed root to infer outliers.
+          Usa a single fixed root to infer outliers.
         min_children : int
-            Only consider taxa with at least the specified number of children taxa when inferring distribution.
+          Only consider taxa with at least the specified number of children taxa when inferring distribution.
         min_support : float
-            Only consider taxa with at least this level of support when inferring distribution.
+          Only consider taxa with at least this level of support when inferring distribution.
         verbose_table : boolean
-            Print additional columns in output table.
+          Print additional columns in output table.
         """
-
-        # midpoint root tree
-        # midpoint_tree = os.path.join(output_dir, 'midpoint.tree')
-        # os.system('genometreetk midpoint %s %s' % (input_tree, midpoint_tree))
 
         # read tree
         self.logger.info('Reading tree.')
@@ -706,11 +791,6 @@ class Outliers(AbstractPlot):
             
         gtdb_parent_ranks = Taxonomy().parents(taxonomy)
 
-        # read taxa to plot
-        taxa_to_plot = None
-        if plot_taxa_file:
-            taxa_to_plot = read_taxa_file(plot_taxa_file)
-
         # read trusted taxa
         trusted_taxa = None
         if trusted_taxa_file:
@@ -720,17 +800,17 @@ class Outliers(AbstractPlot):
         taxa_for_dist_inference = filter_taxa_for_dist_inference(tree, taxonomy, trusted_taxa, min_children, min_support)
         
         # limit plotted taxa
+        taxa_to_plot = None
         if plot_dist_taxa_only:
             taxa_to_plot = taxa_for_dist_inference
+        elif plot_taxa_file:
+            taxa_to_plot = read_taxa_file(plot_taxa_file)
             
-        # calculate relative distance to taxa
-        rd = RelativeDistance()
-        rel_dists = rd.rel_dist_to_named_clades(tree, taxa_to_plot)
-        
         # check if a single fixed root should be used
         if fixed_root:
             self.logger.info('Using single fixed rooting for inferring distributions.')
-            
+            rel_dists = self.rd_fixed_root(tree, taxa_for_dist_inference)
+
             # create fixed rooting style tables and plots
             distribution_table = os.path.join(output_dir, '%s.tsv' % input_tree_name)
             plot_file = os.path.join(output_dir, '%s.png' % input_tree_name)
@@ -741,13 +821,11 @@ class Outliers(AbstractPlot):
                                         taxa_for_dist_inference, 
                                         gtdb_parent_ranks, 
                                         median_outlier_table)
-                                        
-            # create scaled tree
-            rd.decorate_rel_dist(tree)
-            for n in tree.preorder_node_iter(lambda n: n != tree.seed_node):
-                rd_to_parent = n.rel_dist - n.parent_node.rel_dist
-                n.edge_length = rd_to_parent
         else:
+            # calculate relative distance to taxa
+            rd = RelativeDistance()
+            rel_dists = rd.rel_dist_to_named_clades(tree)
+        
             # report number of taxa at each rank
             print ''
             print 'Rank\tTaxa to Plot\tTaxa for Inference'
@@ -756,52 +834,24 @@ class Outliers(AbstractPlot):
                 print '%s\t%d\t%d' % (Taxonomy.rank_labels[rank], len(taxa), len(taxa_for_inference))
             print ''
         
-            # get list of phyla level lineages
-            all_phyla = get_phyla_lineages(tree)
-            self.logger.info('Identified %d phyla.' % len(all_phyla))
-            
-            phyla = [p for p in all_phyla if p in taxa_for_dist_inference]
-            self.logger.info('Using %d phyla as rootings for inferring distributions.' % len(phyla))
-            if len(phyla) < 2:
-                self.logger.error('Rescaling requires at least 2 valid phyla.')
-                sys.exit(-1)
-                
-            # give each node a unique id
-            for i, n in enumerate(tree.preorder_node_iter()):
-                n.id = i
-        
-            # calculate outliers for tree rooted on each phylum
-            phylum_rel_dists = {}
-            rel_node_dists = defaultdict(list)
-            for p in phyla:
-                phylum = p.replace('p__', '').replace(' ', '_').lower()
-                self.logger.info('Calculating information with rooting on %s.' % phylum.capitalize())
+            phylum_rel_dists, rel_node_dists = self.median_rd_over_phyla(tree, 
+                                                                            taxa_for_dist_inference,
+                                                                            taxonomy)
+                                                                            
+            # set edge lengths to median value over all rootings
+            tree.seed_node.rel_dist = 0.0
+            for n in tree.preorder_node_iter(lambda n: n != tree.seed_node):
+                n.rel_dist = np_median(rel_node_dists[n.id])
+                rd_to_parent = n.rel_dist - n.parent_node.rel_dist
+                if rd_to_parent < 0:
+                    self.logger.warning('Not all branches are positive after scaling.')
+                n.edge_length = rd_to_parent
 
+            for phylum, rel_dists in phylum_rel_dists.iteritems():
                 phylum_dir = os.path.join(output_dir, phylum)
                 if not os.path.exists(phylum_dir):
                     os.makedirs(phylum_dir)
-
-                cur_tree = self.root_with_outgroup(tree, taxonomy, p)
-                
-                output_tree = os.path.join(phylum_dir, '%s.rooted.tree' % phylum)
-                cur_tree.write_to_path(output_tree, schema='newick', suppress_rooting=True, unquoted_underscores=True)
-
-                # calculate relative distance to taxa
-                rel_dists = rd.rel_dist_to_named_clades(cur_tree, taxa_to_plot)
-                if not plot_domain:
-                    rel_dists.pop(0, None)
-
-                # remove named groups in outgroup
-                children = Taxonomy().children(p, taxonomy)
-                for r in rel_dists.keys():
-                    rel_dists[r].pop(p, None)
-
-                for t in children:
-                    for r in rel_dists.keys():
-                        rel_dists[r].pop(t, None)
-
-                phylum_rel_dists[phylum] = rel_dists
-
+                    
                 # create distribution plot
                 distribution_table = os.path.join(phylum_dir, '%s.rank_distribution.tsv' % phylum)
                 plot_file = os.path.join(phylum_dir, '%s.rank_distribution.png' % phylum)
@@ -812,42 +862,7 @@ class Outliers(AbstractPlot):
                                             taxa_for_dist_inference, 
                                             gtdb_parent_ranks,
                                             median_outlier_table)
-                                            
-                # calculate relative distance to all nodes
-                self.logger.info('Rescaling tree to reflect relative divergence.')
-                rd.decorate_rel_dist(cur_tree)
-                
-                # determine which lineages represents the 'ingroup'
-                ingroup_subtree = None
-                for c in cur_tree.seed_node.child_node_iter():
-                    _support, taxon_name, _auxiliary_info = parse_label(c.label)
-                    if not taxon_name or p not in taxon_name:
-                        ingroup_subtree = c
-                        break
-                
-                # do a preorder traversal of 'ingroup' and record relative divergence to nodes
-                for n in ingroup_subtree.preorder_iter():                        
-                    rd_to_parent = n.rel_dist - n.parent_node.rel_dist
-                    n.edge_length = rd_to_parent
-                    rel_node_dists[n.id].append(n.rel_dist)
-
-                cur_tree.write_to_path(os.path.join(phylum_dir, '%s.scaled.tree' % phylum), 
-                                        schema='newick', 
-                                        suppress_rooting=True, 
-                                        unquoted_underscores=True)
-                                            
-            # set edge lengths to median value over all rootings
-            tree.seed_node.rel_dist = 0.0
-            for n in tree.preorder_node_iter(lambda n: n != tree.seed_node):
-                n.rel_dist = np_median(rel_node_dists[n.id])
-                rd_to_parent = n.rel_dist - n.parent_node.rel_dist
-                if rd_to_parent < 0:
-                        print '*******************************************************really????'
-                        print n.rel_dist, n.parent_node.rel_dist
-                        print rel_node_dists[n.id]
-                        print rel_node_dists[n.parent_node.id]
-                n.edge_length = rd_to_parent
-                
+   
             plot_file = os.path.join(output_dir, '%s.png' % input_tree_name)
             self._distribution_summary_plot(phylum_rel_dists, taxa_for_dist_inference, plot_file)
 
@@ -865,135 +880,3 @@ class Outliers(AbstractPlot):
                             schema='newick', 
                             suppress_rooting=True, 
                             unquoted_underscores=True)                
-
-    def scale(self, 
-                input_tree, 
-                taxonomy_file,
-                output_dir,
-                trusted_taxa_file,
-                fixed_root,
-                min_children, 
-                min_support):
-        """Scale branches of tree to reflect relative distances.
-
-        Parameters
-        ----------
-        input_tree : str
-            Tree in Newick format.
-        taxonomy_file : str
-            File with taxonomy strings for each taxa.
-        output_dir : str
-            Desired output directory.
-        trusted_taxa_file : str
-            File specifying trusted taxa to consider when inferring distribution. Set to None to consider all taxa.
-        fixed_root : boolean
-            Use single root for calculating relative divergence values.
-        min_children : int
-            Only consider taxa with at least the specified number of children taxa when inferring distribution.
-        min_support : float
-            Only consider taxa with at least this level of support when inferring distribution.
-        """
-        
-        input_tree_name = os.path.splitext(os.path.basename(input_tree))[0]
-        
-        tree = dendropy.Tree.get_from_path(input_tree, 
-                                            schema='newick', 
-                                            rooting='force-rooted', 
-                                            preserve_underscores=True)
-
-        rd = RelativeDistance()
-        
-        # check if a single fixed root should be used
-        if fixed_root:
-            self.logger.info('Using single fixed rooting for inferring distributions.')
-            rd.decorate_rel_dist(tree)
-            
-            for n in tree.preorder_node_iter(lambda n: n != tree.seed_node):
-                rd_to_parent = n.rel_dist - n.parent_node.rel_dist
-                n.edge_length = rd_to_parent
-        else:
-            self.logger.info('Determining relative divergences with rootings at named phyla.')
-            
-            # pull taxonomy from tree or from file
-            if not taxonomy_file:
-                self.logger.info('Reading taxonomy from tree.')
-                taxonomy_file = os.path.join(output_dir, '%s.taxonomy.tsv' % input_tree_name)
-                taxonomy = Taxonomy().read_from_tree(input_tree)
-                Taxonomy().write(taxonomy, taxonomy_file)
-            else:
-                self.logger.info('Reading taxonomy from file.')
-                taxonomy = Taxonomy().read(taxonomy_file)
-                
-            # read trusted taxa
-            trusted_taxa = None
-            if trusted_taxa_file:
-                trusted_taxa = read_taxa_file(trusted_taxa_file)
-                
-            # determine taxa to be used for inferring distribution
-            taxa_for_dist_inference = filter_taxa_for_dist_inference(tree, taxonomy, trusted_taxa, min_children, min_support)
-        
-            # get list of phyla level lineages
-            all_phyla = get_phyla_lineages(tree)
-            self.logger.info('Identified %d phyla.' % len(all_phyla))
-            
-            phyla = [p for p in all_phyla if p in taxa_for_dist_inference]
-            self.logger.info('Using %d phyla as rootings for inferring distributions.' % len(phyla))
-            if len(phyla) < 2:
-                self.logger.error('Rescaling requires at least 2 valid phyla.')
-                sys.exit(-1)
-
-            # give each node a unique id
-            for i, n in enumerate(tree.preorder_node_iter()):
-                n.id = i
-            
-            # calculate outliers for tree rooted on each phylum
-            rel_dists = defaultdict(list)
-            for p in phyla:
-                phylum = p.replace('p__', '').replace(' ', '_').lower()
-                self.logger.info('Calculating information with rooting on %s.' % phylum.capitalize())
-
-                phylum_dir = os.path.join(output_dir, phylum)
-                if not os.path.exists(phylum_dir):
-                    os.makedirs(phylum_dir)
-                    
-                cur_tree = self.root_with_outgroup(tree, taxonomy, p)
-                cur_tree.write_to_path(os.path.join(phylum_dir, '%s.rooted.tree' % phylum), 
-                                        schema='newick', 
-                                        suppress_rooting=True, 
-                                        unquoted_underscores=True)
-
-
-                # calculate relative distance to taxa
-                rd.decorate_rel_dist(cur_tree)
-                
-                # do a preorder traversal of 'ingroup'
-                ingroup_subtree = None
-                for c in cur_tree.seed_node.child_node_iter():
-                    _support, taxon_name, _auxiliary_info = parse_label(c.label)
-                    if not taxon_name or p not in taxon_name:
-                        ingroup_subtree = c
-                        break
-                
-                # do a preorder traversal of tree
-                for n in ingroup_subtree.preorder_iter():                        
-                    rd_to_parent = n.rel_dist - n.parent_node.rel_dist
-                    n.edge_length = rd_to_parent
-                    rel_dists[n.id].append(n.rel_dist)
-
-                cur_tree.write_to_path(os.path.join(phylum_dir, '%s.scaled.tree' % phylum), 
-                                        schema='newick', 
-                                        suppress_rooting=True, 
-                                        unquoted_underscores=True)
-                                        
-            # set edge lengths to median value over all rootings
-            tree.seed_node.rel_dist = 0.0
-            for n in tree.preorder_node_iter(lambda n: n != tree.seed_node):
-                n.rel_dist = np_median(rel_dists[n.id])
-                rd_to_parent = n.rel_dist - n.parent_node.rel_dist
-                n.edge_length = rd_to_parent
-
-        output_tree = os.path.join(output_dir, '%s.scaled.tree' % input_tree_name)
-        tree.write_to_path(output_tree, 
-                            schema='newick', 
-                            suppress_rooting=True, 
-                            unquoted_underscores=True)

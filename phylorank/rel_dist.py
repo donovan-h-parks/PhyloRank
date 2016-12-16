@@ -109,15 +109,13 @@ class RelativeDistance():
 
                 node.rel_dist = rel_dist
 
-    def rel_dist_to_named_clades(self, tree, taxa_to_consider):
+    def rel_dist_to_named_clades(self, tree):
         """Determine relative distance to specific taxa.
 
         Parameters
         ----------
         tree : Dendropy Tree
             Phylogenetic tree.
-        taxa_to_consider : set
-            Named taxonomic groups to consider.
 
         Returns
         -------
@@ -142,9 +140,6 @@ class RelativeDistance():
             # get most-specific rank if a node represents multiple ranks
             if ';' in taxon_name:
                 taxon_name = taxon_name.split(';')[-1].strip()
-
-            if taxa_to_consider and taxon_name not in taxa_to_consider:
-                continue
 
             most_specific_rank = taxon_name[0:3]
             rel_dists[Taxonomy.rank_index[most_specific_rank]][taxon_name] = node.rel_dist

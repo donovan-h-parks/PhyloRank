@@ -38,7 +38,7 @@ class TreeDiff():
         self.logger = logging.getLogger()
   
   
-    def run(self, tree1_file, tree2_file, output_file, min_support, min_taxa, named_only):
+    def run(self, tree1_file, tree2_file, output_dir, min_support, min_taxa, named_only):
         """Calculate supported topological differences between trees.
         
         Parameters
@@ -47,8 +47,8 @@ class TreeDiff():
             File with tree in Newick format.
         tree2_file : str
             File with tree in Newick format.
-        output_file : str
-            Output file.
+        output_dir : str
+            Output directory.
         min_support : float
             Minimum value to consider a lineage well supported.
         min_taxa : int
@@ -60,6 +60,9 @@ class TreeDiff():
         if not named_only:
             self.logger.error("This command currently assumes the 'named_only' flag will be thrown.")
             sys.exit()
+            
+        tree1_name = os.path.splitext(os.path.basename(tree1_file))[0]
+        tree2_name = os.path.splitext(os.path.basename(tree2_file))[0]
         
         tree1 = dendropy.Tree.get_from_path(tree1_file, 
                                             schema='newick', 
@@ -91,12 +94,20 @@ class TreeDiff():
         # identify nodes meeting specified criteria
         tree1_nodes = {}
         tree2_nodes = {}
-        for tree, tree_nodes in ([tree1, tree1_nodes],[tree2, tree2_nodes]):
+        node_support1 = {}
+        node_support2 = {}
+        for tree, tree_nodes, support_values in ([tree1, tree1_nodes, node_support1],[tree2, tree2_nodes, node_support2]):
             for n in tree.preorder_internal_node_iter():
                 support, taxon_name, _auxiliary_info = parse_label(n.label)
                 if named_only and not taxon_name:
                     continue
                     
+                if not support:
+                    continue
+                    
+                support = int(support)
+                support_values[taxon_name] = support
+                
                 num_taxa = sum([1 for _ in n.leaf_iter()])
                 if support >= min_support and num_taxa >= min_taxa:
                     tree_nodes[taxon_name] = [support, num_taxa, n]
@@ -104,9 +115,15 @@ class TreeDiff():
         self.logger.info('Tree 1 has %d supported nodes.' % len(tree1_nodes))
         self.logger.info('Tree 2 has %d supported nodes.' % len(tree2_nodes))
         
-        # identify supported nodes the differ in the two trees
+        # compare supported nodes between the two trees
         diffs = {}
+        congruent_taxa = defaultdict(list)       # same node bootstrap supported in both trees
+        incongruent_taxa = defaultdict(list)     # node supported in both trees, but have different extant taxa
+        unresolved_taxa = defaultdict(list)      # supported node in one tree is not present and/or well support in the other tree
+
         for taxon, data1 in tree1_nodes.iteritems():
+            most_specific_taxon = taxon.split(';')[-1].strip()
+            rank_index = Taxonomy.rank_prefixes.index(most_specific_taxon[0:3])
             support1, num_taxa1, node1 = data1
             
             if taxon in tree2_nodes:
@@ -119,8 +136,21 @@ class TreeDiff():
                 
                 if len(diff_taxa) > 0:
                     diffs[taxon] = [len(diff_taxa), ','.join(taxa1 - taxa2), ','.join(taxa2- taxa1)]
-                    
-        fout = open(output_file, 'w')
+                    incongruent_taxa[rank_index].append((taxon, len(diff_taxa)))
+                else:
+                    congruent_taxa[rank_index].append((taxon, support1, support2))
+            else:
+                unresolved_taxa[rank_index].append((taxon, tree1_name, support1, tree2_name, node_support2.get(taxon, -1)))
+                
+        # identify unresolved taxa in tree 2
+        for taxon, data2 in tree2_nodes.iteritems():
+            support2, num_taxa2, node2 = data1
+            if taxon not in tree1_nodes:
+                unresolved_taxa[rank_index].append((taxon, tree2_name, support2, tree1_name, node_support1.get(taxon, -1)))
+        
+        # write out difference in extant taxa for incongruent taxa
+        tax_diff_file = os.path.join(output_dir, 'incongruent_taxa.tsv')
+        fout = open(tax_diff_file, 'w')
         fout.write('Taxon\tNo. Incongruent Taxa\tTree1 - Tree2\tTree2 - Tree1\n')
         for taxon in Taxonomy().sort_taxa(diffs.keys()):
             num_diffs, t12_diff_str, t21_diff_str = diffs[taxon]
@@ -131,3 +161,43 @@ class TreeDiff():
         
         fout.close()
         
+        # write out classification of each node
+        classification_file = os.path.join(output_dir, 'taxon_classification.tsv')
+        fout_classification = open(classification_file, 'w')
+        fout_classification.write('Rank\tTaxon\tClassification\tDescription\n')
+        
+        stats_file = os.path.join(output_dir, 'tree_diff_stats.tsv')
+        fout_stats = open(stats_file, 'w')
+        fout_stats.write('Rank\tCongruent\tIncongruent\tUnresolved for %s\tUnresolved for %s\n' % (tree1_name, tree2_name))
+        for rank, rank_label in enumerate(Taxonomy.rank_labels):
+            for info in congruent_taxa[rank]:
+                taxon, support1, support2 = info
+                
+                desc = 'Taxon is congruent with %d and %d support.' % (support1, support2)
+                fout_classification.write('%s\t%s\t%s\t%s\n' % (rank_label, taxon, 'congruent', desc))
+                
+            for info in incongruent_taxa[rank]:
+                taxon, num_diff_taxa = info
+                desc = 'Taxon has %d extant taxa in disagreement.' % num_diff_taxa
+                fout_classification.write('%s\t%s\t%s\t%s\n' % (rank_label, taxon, 'incongruent', desc))
+                
+            unresolved1 = 0
+            unresolved2 = 0
+            for info in unresolved_taxa[rank]:
+                taxon, supported_tree_name, support1, unsupported_tree_name, support2 = info
+                desc = 'Taxon is supported in %s (%d), but not in %s (%d)' % (supported_tree_name, support1, unsupported_tree_name, support2)
+                fout_classification.write('%s\t%s\t%s\t%s\n' % (rank_label, taxon, 'incongruent', desc))
+                
+                if supported_tree_name == tree1_name:
+                    unresolved1 += 1
+                else:
+                    unresolved2 += 1
+                
+            fout_stats.write('%s\t%d\t%d\t%s\t%s\n' % (rank_label, 
+                                                        len(congruent_taxa[rank]),
+                                                        len(incongruent_taxa[rank]), 
+                                                        unresolved1,
+                                                        unresolved2))
+                
+        fout_classification.close()
+        fout_stats.close()

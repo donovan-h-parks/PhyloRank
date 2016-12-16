@@ -171,8 +171,8 @@ class TaxDiff():
                 fout.write('\n')
         fout.close()
         
-    def run(self, tree1_file, tree2_file, output_dir):
-        """Tabulate differences between two taxonomies.
+    def tree_tax_diff(self, tree1_file, tree2_file, output_dir):
+        """Tabulate differences between two taxonomies on a tree.
         
         Parameters
         ----------
@@ -223,7 +223,7 @@ class TaxDiff():
         tax_file_name = os.path.splitext(os.path.basename(tree1_file))[0]
         output_file = os.path.join(output_dir, '%s.taxa_diff.tsv' % tax_file_name)
         fout = open(output_file, 'w')
-        fout.write('Rank\tClassification\tGTDB taxonomy\tNCBI taxonomy\n')
+        fout.write('Rank\tClassification\tTaxonomy 1\tTaxonomy 2\n')
         taxon2_accounted_for = defaultdict(set)
         for rank, rank_label in enumerate(Taxonomy.rank_labels[0:-1]):
             for taxon in taxa_at_rank1[rank]: 
@@ -267,4 +267,99 @@ class TaxDiff():
         # tabulate congruence of taxonomy strings
         output_table = os.path.join(output_dir, '%s.perc_diff.tsv' % tax_file_name)
         self._tax_diff_table(tax1, tax2, output_table)
+    
+    def tax_diff(self, tax1_file, tax2_file, include_user_taxa, output_dir):
+        """Tabulate differences between two taxonomies.
         
+        Parameters
+        ----------
+        tax1_file : str
+            First taxonomy file.
+        tax2_file : str
+            Second taxonomy file.
+        include_user_taxa : boolean
+            Flag indicating if User genomes should be considered.
+        output_dir : str
+            Output directory.
+        """
+        
+        tax1 = Taxonomy().read(tax1_file)
+        tax2 = Taxonomy().read(tax2_file)
+        
+        if not include_user_taxa:
+            new_tax1 = {}
+            for genome_id, taxonomy in tax1.iteritems():
+                if not genome_id.startswith('U_'):
+                    new_tax1[genome_id] = taxonomy
+            tax1 = new_tax1
+            
+            new_tax2 = {}
+            for genome_id, taxonomy in tax2.iteritems():
+                if not genome_id.startswith('U_'):
+                    new_tax2[genome_id] = taxonomy
+            tax2 = new_tax2
+        
+        common_taxa = set(tax1.keys()).intersection(tax2.keys())
+        
+        self.logger.info('First taxonomy contains %d taxa.' % len(tax1))
+        self.logger.info('Second taxonomy contains %d taxa.' % len(tax2))
+        self.logger.info('Taxonomies have %d taxa in common.' % len(common_taxa))
+        
+        # identify differences between taxonomies
+        tax_file_name1 = os.path.splitext(os.path.basename(tax1_file))[0]
+        tax_file_name2 = os.path.splitext(os.path.basename(tax2_file))[0]
+        output_table = os.path.join(output_dir, '%s.tax_diff.tsv' % tax_file_name1)
+        
+        fout = open(output_table, 'w')
+        fout.write('Genome ID\tChange\tRank\t%s\t%s\n' % (tax_file_name1, tax_file_name2))
+        
+        unchanged = defaultdict(int)           # T2 = g__Bob -> T1 = g__Bob, or T2 = g__ -> T1 = g__
+        active_change = defaultdict(int)       # T2 = g__Bob -> T1 = g__Jane, or T2 = g__Bob -> T1 = g__Bob_A
+        passive_change = defaultdict(int)      # T2 = g__??? -> T1 = g__Jane
+        unresolved_change = defaultdict(int)   # T2 = g__Box -> T1 = g__???
+        for taxa in common_taxa:
+            t1 = tax1[taxa]
+            t2 = tax2[taxa]
+            
+            for rank, (taxon1, taxon2) in enumerate(zip(t1, t2)):
+                if taxon1 == taxon2:
+                    unchanged[rank] += 1
+                elif taxon1 != Taxonomy.rank_prefixes[rank] and taxon2 != Taxonomy.rank_prefixes[rank]:
+                    active_change[rank] += 1
+                    fout.write('%s\t%s\t%s\t%s\t%s\n' % (taxa, 'active', Taxonomy.rank_labels[rank], ';'.join(t1), ';'.join(t2)))
+                elif taxon2 == Taxonomy.rank_prefixes[rank]:
+                    passive_change[rank] += 1
+                    fout.write('%s\t%s\t%s\t%s\t%s\n' % (taxa, 'passive', Taxonomy.rank_labels[rank], ';'.join(t1), ';'.join(t2)))
+                elif taxon1 == Taxonomy.rank_prefixes[rank]:
+                    unresolved_change[rank] += 1
+                    fout.write('%s\t%s\t%s\t%s\t%s\n' % (taxa, 'unresolved', Taxonomy.rank_labels[rank], ';'.join(t1), ';'.join(t2)))
+                    
+        fout.close()
+  
+        # report results
+        output_table = os.path.join(output_dir, '%s.tax_diff_summary.tsv' % tax_file_name1)
+        
+        fout = open(output_table, 'w')
+        fout.write('Rank\tUnchanged\tUnchanged (%)\tActive\t Active (%)\tPassive\tPassive (%)\tUnresolved\tUnresolved (%)\n')
+        print 'Rank\tUnchanged\tActive\tPassive\tUnresolved\tTotal'
+        for rank in xrange(0, len(Taxonomy.rank_prefixes)):
+            total = unchanged[rank] + active_change[rank] + passive_change[rank] + unresolved_change[rank]
+            if total != 0:
+                fout.write('%s\t%d\t%.1f\t%d\t%.1f\t%d\t%.1f\t%d\t%.1f\n' %
+                                    (Taxonomy.rank_labels[rank],
+                                    unchanged[rank], unchanged[rank] * 100.0 / total,
+                                    active_change[rank], active_change[rank] * 100.0 / total,
+                                    passive_change[rank], passive_change[rank] * 100.0 / total,
+                                    unresolved_change[rank], unresolved_change[rank] * 100.0 / total))
+                print '%s\t%d\t%d\t%d\t%d\t%d' % (Taxonomy.rank_labels[rank],
+                                                    unchanged[rank],
+                                                    active_change[rank],
+                                                    passive_change[rank],
+                                                    unresolved_change[rank],
+                                                    total)
+                                
+            
+                    
+                
+                
+            

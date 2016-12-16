@@ -20,6 +20,5 @@ setup(
     description='Assigns taxonomic ranks based on evolutionary divergence.',
     long_description=open('README.md').read(),
     install_requires=[
-        "scikit-bio >= 0.4.0",
         "biolib >= 0.0.23"],
 )

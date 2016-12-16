@@ -20,7 +20,7 @@ import sys
 import logging
 from collections import defaultdict
 
-from phylorank.decorate_tree import DecorateTree
+from phylorank.mark_tree import MarkTree
 from phylorank.rel_dist import RelativeDistance
 from phylorank.newick import parse_label
 from phylorank.outliers import Outliers
@@ -30,6 +30,7 @@ from phylorank.tree_diff import TreeDiff
 from phylorank.tax_diff import TaxDiff
 from phylorank.plot.robustness_plot import RobustnessPlot
 from phylorank.plot.distribution_plot import DistributionPlot
+from phylorank.decorate import Decorate
 
 from biolib.common import (make_sure_path_exists,
                            check_dir_exists,
@@ -77,42 +78,26 @@ class OptionsParser():
 
         self.logger.info('Done.')
         
-    def scale(self, options):
-        """Scale command"""
-
-        check_file_exists(options.input_tree)
-        
-        if not os.path.exists(options.output_dir):
-            os.makedirs(options.output_dir)
-        
-        outliers = Outliers()
-        outliers.scale(options.input_tree,
-                        options.taxonomy_file,
-                        options.output_dir,
-                        options.trusted_taxa_file,
-                        options.fixed_root,
-                        options.min_children,
-                        options.min_support)
-        
-        self.logger.info('Done.')
-        
     def tree_diff(self, options):
         """Tree diff command."""
         
         check_file_exists(options.input_tree1)
         check_file_exists(options.input_tree2)
         
+        if not os.path.exists(options.output_dir):
+            os.makedirs(options.output_dir)
+        
         td = TreeDiff()
         td.run(options.input_tree1,
                 options.input_tree2,
-                options.output_file,
+                options.output_dir,
                 options.min_support,
                 options.min_taxa,
                 options.named_only)
         
         self.logger.info('Done.')
         
-    def tax_diff(self, options):
+    def tree_tax_diff(self, options):
         """Taxonomy difference command."""
         
         check_file_exists(options.input_tree1)
@@ -122,8 +107,25 @@ class OptionsParser():
             os.makedirs(options.output_dir)
         
         td = TaxDiff()
-        td.run(options.input_tree1,
-                options.input_tree2,
+        td.tree_tax_diff(options.input_tree1,
+                            options.input_tree2,
+                            options.output_dir)
+        
+        self.logger.info('Done.')
+        
+    def tax_diff(self, options):
+        """Taxonomy difference command."""
+        
+        check_file_exists(options.tax1_file)
+        check_file_exists(options.tax2_file)
+        
+        if not os.path.exists(options.output_dir):
+            os.makedirs(options.output_dir)
+        
+        td = TaxDiff()
+        td.tax_diff(options.tax1_file,
+                options.tax2_file,
+                options.include_user_taxa,
                 options.output_dir)
         
         self.logger.info('Done.')
@@ -149,13 +151,13 @@ class OptionsParser():
 
         self.logger.info('Done.')
 
-    def decorate(self, options):
-        """Decorate command"""
+    def mark_tree(self, options):
+        """Mark tree command"""
 
         check_file_exists(options.input_tree)
 
-        dt = DecorateTree()
-        dt.run(options.input_tree,
+        mt = MarkTree()
+        mt.run(options.input_tree,
                     options.output_tree,
                     options.min_support,
                     options.only_named_clades,
@@ -165,7 +167,23 @@ class OptionsParser():
                     not options.no_prediction,
                     options.thresholds)
 
-        self.logger.info('Decorated tree written to: %s' % options.output_tree)
+        self.logger.info('Marked tree written to: %s' % options.output_tree)
+        
+    def decorate(self, options):
+        """Place internal taxonomic labels on tree."""
+
+        check_file_exists(options.input_tree)
+        check_file_exists(options.taxonomy_file)
+
+        decorate = Decorate()
+        decorate.run(options.input_tree,
+                        options.taxonomy_file,
+                        options.trusted_taxa_file,
+                        options.min_children,
+                        options.min_support,
+                        options.output_tree)
+
+        self.logger.info('Finished decorating tree.')
    
     def pull(self, options):
         """Pull command"""
@@ -454,14 +472,16 @@ class OptionsParser():
 
         if(options.subparser_name == 'outliers'):
             self.outliers(options)
-        elif(options.subparser_name == 'decorate'):
-            self.decorate(options)
-        elif(options.subparser_name == 'scale'):
-            self.scale(options)
+        elif(options.subparser_name == 'mark_tree'):
+            self.mark_tree(options)
         elif(options.subparser_name == 'tree_diff'):
             self.tree_diff(options)
+        elif(options.subparser_name == 'tree_tax_diff'):
+            self.tree_tax_diff(options)
         elif(options.subparser_name == 'tax_diff'):
             self.tax_diff(options)
+        elif(options.subparser_name == 'decorate'):
+            self.decorate(options)
         elif(options.subparser_name == 'pull'):
             self.pull(options)
         elif(options.subparser_name == 'validate'):
