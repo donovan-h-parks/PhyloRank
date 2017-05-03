@@ -561,7 +561,26 @@ class BranchLengthDistribution():
         #self.logger.info('NCBI-only %d; SRA-only %d' % (ncbi_only, sra_only))
         
         tree.write_to_path(output_tree, schema='newick', suppress_rooting=True, unquoted_underscores=True)
-
+        
+    def _write_bl_dist(self, tree, output_rd_file):
+        """Write out mean branch length for each node."""
+        
+        fout = open(output_rd_file, 'w')
+        for node in tree.preorder_node_iter():
+            if node.is_leaf():
+                fout.write('%s\t%f\n' % (node.taxon.label, 0))
+            else:
+                # get mean branch length to extent taxa
+                dists_to_tips = []
+                for t in node.leaf_iter():
+                    dists_to_tips.append(self._dist_to_ancestor(t, node))
+                    
+                # get left and right taxa that define this node
+                taxa = list(node.preorder_iter(lambda n: n.is_leaf()))
+                fout.write('%s|%s\t%f\n' % (taxa[0].taxon.label, taxa[-1].taxon.label, np_mean(dists_to_tips)))
+                
+        fout.close()
+                
     def run(self, input_tree, trusted_taxa_file, min_children, taxonomy_file, output_dir):
         """Calculate distribution of branch lengths at each taxonomic rank.
 
@@ -583,11 +602,13 @@ class BranchLengthDistribution():
                                             schema='newick', 
                                             rooting='force-rooted', 
                                             preserve_underscores=True)
+                                            
+        input_tree_name = os.path.splitext(os.path.basename(input_tree))[0]
         
         # pull taxonomy from tree
         if not taxonomy_file:
             self.logger.info('Reading taxonomy from tree.')
-            taxonomy_file = os.path.join(output_dir, 'taxonomy.tsv')
+            taxonomy_file = os.path.join(output_dir, '%s.taxonomy.tsv' % input_tree_name)
             taxonomy = Taxonomy().read_from_tree(input_tree)
             Taxonomy().write(taxonomy, taxonomy_file)
         else:
@@ -622,11 +643,8 @@ class BranchLengthDistribution():
             taxa_at_rank[Taxonomy.rank_index[most_specific_rank]].append(taxon)
                 
             for n in node.leaf_iter():
-                dist_to_node = 0
-                while n != node:
-                    dist_to_node += n.edge_length
-                    n = n.parent_node
-                
+                dist_to_node = self._dist_to_ancestor(n, node)
+ 
                 for t in taxa:
                     taxa_bl_dist[t].append(dist_to_node)
 
@@ -654,7 +672,7 @@ class BranchLengthDistribution():
             sorted_taxon += sorted(taxa_at_rank)
                 
         # report results for each named group
-        taxa_file = os.path.join(output_dir, 'taxa_bl_dist.tsv')
+        taxa_file = os.path.join(output_dir, '%s.taxa_bl_dist.tsv' % input_tree_name)
         fout = open(taxa_file, 'w')
         fout.write('Taxa\tUsed for Inference\tMean\tStd\t5th\t10th\t50th\t90th\t95th\n')
         for taxon in sorted_taxon:
@@ -669,7 +687,7 @@ class BranchLengthDistribution():
         fout.close()
         
         # report results for each taxonomic rank
-        rank_file = os.path.join(output_dir, 'rank_bl_dist.tsv')
+        rank_file = os.path.join(output_dir, '%s.rank_bl_dist.tsv' % input_tree_name)
         fout = open(rank_file, 'w')
         fout.write('Rank\tMean\tStd\t5th\t10th\t50th\t90th\t95th\n')
         for rank in Taxonomy.rank_labels:
@@ -680,4 +698,8 @@ class BranchLengthDistribution():
                                                                 np_std(dist),
                                                                 p[0], p[1], p[2], p[3], p[4]))
         fout.close()
+        
+        # report results for each node
+        output_bl_file = os.path.join(output_dir, '%s.node_bl_dist.tsv' % input_tree_name)
+        self._write_bl_dist(tree, output_bl_file)
         

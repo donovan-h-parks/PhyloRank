@@ -78,6 +78,68 @@ class OptionsParser():
 
         self.logger.info('Done.')
         
+    def compare_red(self, options):
+        """Compare RED values of taxa calculated over different trees."""
+
+        check_file_exists(options.red_table1)
+        check_file_exists(options.red_table2)
+        check_file_exists(options.red_dict2)
+        
+        median_reds = eval(open(options.red_dict2).readline())
+        
+        red1 = {}
+        red2 = {}
+        lineage = {}
+        for d, red_file in [(red1, options.red_table1), (red2, options.red_table2)]:
+            with open(red_file) as f:
+                f.readline()
+                
+                for line in f:
+                    line_split = line.strip().split('\t')
+                    taxon = line_split[0]
+                    median_red = float(line_split[2])
+                    d[taxon] = median_red
+                    
+                    if d == red1:
+                        lineage[taxon] = line_split[1]
+
+        red1_label = os.path.splitext(os.path.basename(options.red_table1))[0]
+        red2_label = os.path.splitext(os.path.basename(options.red_table2))[0]
+
+        fout = open(options.output_table, 'w')
+        fout.write('Taxon\tLineage\t%s\t%s\tDifference\tAbs. Difference\tChanged rank\n' % (red1_label, red2_label))
+        for taxon in Taxonomy().sort_taxa(set(red1.keys()).union(red2.keys())):
+            r1 = red1.get(taxon, 'NA')
+            r2 = red2.get(taxon, 'NA')
+            if r1 == 'NA':
+                fout.write('%s\t%s\t%s\t%.3f\t%s\t%s' % (taxon, 'NA', 'NA', r2, 'NA', 'NA'))                    
+            elif r2 == 'NA':
+                fout.write('%s\t%s\t%.3f\t%s\t%s\t%s\t%s\n' % (taxon, lineage[taxon], r1, 'NA', 'NA', 'NA', 'NA'))
+            else:
+                fout.write('%s\t%s\t%.3f\t%.3f\t%.3f\t%.3f' % (taxon, lineage[taxon], r1, r2, r1-r2, abs(r1-r2)))
+
+            if r2 != 'NA':
+                rank_prefix = taxon[0:3]
+                rank_label = Taxonomy.rank_labels[Taxonomy.rank_prefixes.index(rank_prefix)]
+                rank_median = median_reds[rank_label]
+            
+                closest_rank = rank_label
+                closest_dist = 1e6
+                if r2 < rank_median - 0.1 or r2 > rank_median + 0.1:
+                    for rank, median_red in median_reds.iteritems():
+                        d = abs(r2 - median_red)
+                        if d < closest_dist:
+                            closest_dist = d
+                            closest_rank = rank
+                        
+                if rank_label != closest_rank:
+                    fout.write('\tTrue (%s: %.3f)' % (closest_rank, closest_dist))
+                else:
+                    fout.write('\tFalse')
+                fout.write('\n')
+            
+        fout.close()
+        
     def tree_diff(self, options):
         """Tree diff command."""
         
@@ -181,6 +243,7 @@ class OptionsParser():
                         options.trusted_taxa_file,
                         options.min_children,
                         options.min_support,
+                        options.skip_rd_refine,
                         options.output_tree)
 
         self.logger.info('Finished decorating tree.')
@@ -207,13 +270,15 @@ class OptionsParser():
         t = taxonomy.read(options.taxonomy_file)
 
         errors = taxonomy.validate(t,
-                                     not options.no_prefix,
-                                     not options.no_all_ranks,
-                                     not options.no_hierarhcy,
-                                     not options.no_species,
-                                     True)
+                                      check_prefixes=not options.no_prefix,
+                                      check_ranks=not options.no_all_ranks,
+                                      check_hierarchy=not options.no_hierarhcy,
+                                      check_species=not options.no_species,
+                                      check_group_names=True,
+                                      check_duplicate_names=True,
+                                      report_errors=True)
 
-        invalid_ranks, invalid_prefixes, invalid_species_name, invalid_hierarchies = errors
+        invalid_ranks, invalid_prefixes, invalid_species_name, invalid_hierarchies, invalid_group_name = errors
 
         if sum([len(e) for e in errors]) == 0:
             self.logger.info('No errors identified in taxonomy file.')
@@ -222,14 +287,10 @@ class OptionsParser():
             self.logger.info('Identified %d rank prefix errors.' % len(invalid_prefixes))
             self.logger.info('Identified %d invalid species names.' % len(invalid_species_name))
             self.logger.info('Identified %d taxa with multiple parents.' % len(invalid_hierarchies))
+            self.logger.info('Identified %d invalid group names.' % len(invalid_group_name))
 
     def append(self, options):
         """Append command"""
-        self.logger.info('')
-        self.logger.info('*******************************************************************************')
-        self.logger.info(' [PhyloRank - append] Appending taxonomy to extant tree labels.')
-        self.logger.info('*******************************************************************************')
-
         check_file_exists(options.input_tree)
         check_file_exists(options.taxonomy_file)
 
@@ -472,6 +533,8 @@ class OptionsParser():
 
         if(options.subparser_name == 'outliers'):
             self.outliers(options)
+        elif(options.subparser_name == 'compare_red'):
+            self.compare_red(options)   
         elif(options.subparser_name == 'mark_tree'):
             self.mark_tree(options)
         elif(options.subparser_name == 'tree_diff'):

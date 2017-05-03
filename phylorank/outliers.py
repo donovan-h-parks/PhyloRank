@@ -18,6 +18,7 @@
 import os
 import sys
 import logging
+import random
 from collections import defaultdict, namedtuple
 
 from phylorank.rel_dist import RelativeDistance
@@ -100,22 +101,43 @@ class Outliers(AbstractPlot):
         self.logger.info('Identifying %d genomes in the outgroup.' % len(outgroup))
 
         outgroup_in_tree = set()
+        ingroup_in_tree = set()
         for n in new_tree.leaf_node_iter():
             if n.taxon.label in outgroup:
                 outgroup_in_tree.add(n.taxon)
+            else:
+                ingroup_in_tree.add(n)
         self.logger.info('Identified %d outgroup taxa in the tree.' % len(outgroup_in_tree))
 
         if len(outgroup_in_tree) == 0:
             self.logger.warning('No outgroup taxa identified in the tree.')
             self.logger.warning('Tree was not rerooted.')
             sys.exit(0)
+            
+        # There is a complication here. We wish to find the MRCA of the outgroup
+        # taxa. Finding the MRCA requires a rooted tree and we have no gaurantee
+        # that the tree isn't currently rooted within the outgroup clade. There is
+        # also no way to identify a node that is gauranteed to be outside the outgroup
+        # clade. As such, the tree is randomly rooted on a leaf node not in the outgroup.
+        # This random rerooting is performed until the MRCA does not spans all taxa in 
+        # the tree.
 
-        mrca = new_tree.mrca(taxa=outgroup_in_tree)
+        leaves_in_tree = sum([1 for _ in new_tree.leaf_node_iter()])
+        while True:
+            rnd_ingroup_leaf = random.sample(ingroup_in_tree, 1)[0]
+            new_tree.reroot_at_edge(rnd_ingroup_leaf.edge,
+                                    length1=0.5 * rnd_ingroup_leaf.edge_length,
+                                    length2=0.5 * rnd_ingroup_leaf.edge_length)
 
-        if len(mrca.leaf_nodes()) != len(outgroup_in_tree):
+            mrca = new_tree.mrca(taxa=outgroup_in_tree)
+            leaves_in_mrca = sum([1 for _ in mrca.leaf_iter()])
+            if leaves_in_mrca != leaves_in_tree:
+                break
+
+        if leaves_in_mrca != len(outgroup_in_tree):
             self.logger.info('Outgroup is not monophyletic. Tree will be rerooted at the MRCA of the outgroup.')
-            self.logger.info('The outgroup consisted of %d taxa, while the MRCA has %d leaf nodes.' % (len(outgroup_in_tree), len(mrca.leaf_nodes())))
-            if len(mrca.leaf_nodes()) == len(new_tree.leaf_nodes()):
+            self.logger.info('The outgroup consisted of %d taxa, while the MRCA has %d leaf nodes.' % (len(outgroup_in_tree), leaves_in_mrca))
+            if leaves_in_mrca == leaves_in_tree:
                 self.logger.warning('The MRCA spans all taxa in the tree.')
                 self.logger.warning('This indicating the selected outgroup is likely polyphyletic in the current tree.')
                 self.logger.warning('Polyphyletic outgroups are not suitable for rooting. Try another outgroup.')
@@ -240,7 +262,11 @@ class Outliers(AbstractPlot):
             binwidth = 0.025
             bins = np_arange(0, 1.0 + binwidth, binwidth)
 
-            w = float(len(mono)) / (len(mono) + len(poly) + len(no_inference))
+            d = len(mono) + len(poly) + len(no_inference)
+            if d == 0:
+                break
+                
+            w = float(len(mono)) / d
             n = 0
             if len(mono) > 0:
                 mono_max_count = max(np_histogram(mono, bins=bins)[0])
@@ -407,7 +433,9 @@ class Outliers(AbstractPlot):
         median_for_rank = {}
         for i, rank in enumerate(sorted(medians_for_taxa.keys())):
                 v = [np_median(dists) for taxon, dists in medians_for_taxa[rank].iteritems() if taxon in taxa_for_dist_inference]
-                median_for_rank[rank] = np_median(v)
+                
+                if v:
+                    median_for_rank[rank] = np_median(v)
                 
         return median_for_rank
         
@@ -435,6 +463,10 @@ class Outliers(AbstractPlot):
         percentiles = {}
         for i, rank in enumerate(sorted(medians_for_taxa.keys())):
             v = [np_median(dists) for taxon, dists in medians_for_taxa[rank].iteritems() if taxon in taxa_for_dist_inference]
+            if not v:
+                # not taxa at rank suitable for creating classification boundaries
+                continue
+            
             p10, p50, p90 = np_percentile(v, [10, 50, 90])
             ax.plot((p10, p10), (i, i + 0.25), c=(0.3, 0.3, 0.3), lw=2, zorder=2)
             ax.plot((p50, p50), (i, i + 0.5), c=(0.3, 0.3, 0.3), lw=2, zorder=2)
@@ -483,23 +515,25 @@ class Outliers(AbstractPlot):
                     mono.append(md)
 
             # histogram for each rank
-            mono = np_array(mono)
-            no_inference = np_array(no_inference)
-            poly = np_array(poly)
-            binwidth = 0.025
-            bins = np_arange(0, 1.0 + binwidth, binwidth)
+            n = 0
+            if len(mono) > 0:
+                mono = np_array(mono)
+                no_inference = np_array(no_inference)
+                poly = np_array(poly)
+                binwidth = 0.025
+                bins = np_arange(0, 1.0 + binwidth, binwidth)
 
-            mono_max_count = max(np_histogram(mono, bins=bins)[0])
-            mono_weights = np_ones_like(mono) * (1.0 / mono_max_count)
+                mono_max_count = max(np_histogram(mono, bins=bins)[0])
+                mono_weights = np_ones_like(mono) * (1.0 / mono_max_count)
 
-            w = float(len(mono)) / (len(mono) + len(poly) + len(no_inference))
-            n, b, p = ax.hist(mono, bins=bins,
-                      color=(0.0, 0.0, 1.0),
-                      alpha=0.25,
-                      weights=0.9 * w * mono_weights,
-                      bottom=i,
-                      lw=0,
-                      zorder=0)
+                w = float(len(mono)) / (len(mono) + len(poly) + len(no_inference))
+                n, b, p = ax.hist(mono, bins=bins,
+                          color=(0.0, 0.0, 1.0),
+                          alpha=0.25,
+                          weights=0.9 * w * mono_weights,
+                          bottom=i,
+                          lw=0,
+                          zorder=0)
                       
             if len(no_inference) > 0:
                 no_inference_max_count = max(np_histogram(no_inference, bins=bins)[0])
@@ -576,10 +610,10 @@ class Outliers(AbstractPlot):
         
         # determine median relative distance for each taxa
         medians_for_taxa = self.taxa_median_rd(phylum_rel_dists)
-
+        
         # determine median relative distance for each rank
         median_for_rank = self.rank_median_rd(phylum_rel_dists, taxa_for_dist_inference)
-          
+
         fout_rank = open(rank_file, 'w')
         median_str = []
         for rank in sorted(median_for_rank.keys()):
@@ -714,7 +748,7 @@ class Outliers(AbstractPlot):
 
             phylum_rel_dists[phylum] = rel_dists
             
-            # calculate relative distance to all nodes')
+            # calculate relative distance to all nodes
             rd.decorate_rel_dist(cur_tree)
             
             # determine which lineages represents the 'ingroup'
@@ -730,6 +764,20 @@ class Outliers(AbstractPlot):
                 rel_node_dists[n.id].append(n.rel_dist)
                                                            
         return phylum_rel_dists, rel_node_dists
+        
+    def _write_rd(self, tree, output_rd_file):
+        """Write out relative divergences for each node."""
+        
+        fout = open(output_rd_file, 'w')
+        for n in tree.preorder_node_iter():
+            if n.is_leaf():
+                fout.write('%s\t%f\n' % (n.taxon.label, n.rel_dist))
+            else:
+                # get left and right taxa that define this node
+                taxa = list(n.preorder_iter(lambda n: n.is_leaf()))
+                fout.write('%s|%s\t%f\n' % (taxa[0].taxon.label, taxa[-1].taxon.label, n.rel_dist))
+                
+        fout.close()
         
     def run(self, input_tree, 
                     taxonomy_file, 
@@ -798,7 +846,7 @@ class Outliers(AbstractPlot):
 
         # determine taxa to be used for inferring distribution
         taxa_for_dist_inference = filter_taxa_for_dist_inference(tree, taxonomy, trusted_taxa, min_children, min_support)
-        
+
         # limit plotted taxa
         taxa_to_plot = None
         if plot_dist_taxa_only:
@@ -874,6 +922,9 @@ class Outliers(AbstractPlot):
                                                 median_outlier_table, 
                                                 median_rank_file, 
                                                 verbose_table)
+
+        output_rd_file = os.path.join(output_dir, '%s.node_rd.tsv' % input_tree_name)
+        self._write_rd(tree, output_rd_file)
                                                 
         output_tree = os.path.join(output_dir, '%s.scaled.tree' % input_tree_name)
         tree.write_to_path(output_tree, 

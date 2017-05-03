@@ -54,10 +54,11 @@ def print_help():
     print '''\
 
   Curation methods:
-    outliers    -> Create table, scaled tree, and plot useful for identifying taxonomic outliers
+    outliers    -> Create RED table, scaled tree, and plot useful for identifying taxonomic outliers
+    compare_red -> Compare RED values of taxa calculated over different trees
+    rd_ranks    -> Calculate number of taxa for specified RED thresholds
     dist_plot   -> Plot distribution of taxa in each taxonomic rank
     mark_tree   -> Mark nodes with distribution information and predicted taxonomic ranks
-    rd_ranks    -> Calculate number of taxa for specified rd thresholds
 
   Taxonomy comparison methods:
     tree_diff     -> Quantify bootstrap supported topological differences between trees
@@ -148,6 +149,15 @@ if __name__ == '__main__':
     outliers_parser.add_argument('--dpi', help='DPI of plots', type=int, default=96)
     outliers_parser.add_argument('--verbose_table', action="store_true", help='add additional columns to output table')
    
+    # Compare RED values of taxa calculated over different trees
+    compare_red_parser = subparsers.add_parser('compare_red',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Compare RED values of taxa calculated over different trees')
+    compare_red_parser.add_argument('red_table1', help="RED table calculated by 'outlier' command.")
+    compare_red_parser.add_argument('red_table2', help="RED table calculated by 'outlier' command.")
+    compare_red_parser.add_argument('red_dict2', help="Median RED dictionary calculated by 'outlier' command.")
+    compare_red_parser.add_argument('output_table', help='output table')
+    
     # quanitify differences between two trees
     tree_diff_parser = subparsers.add_parser('tree_diff',
                                             formatter_class=CustomHelpFormatter,
@@ -217,6 +227,7 @@ if __name__ == '__main__':
     decorate_parser.add_argument('input_tree', help='tree to decorate')
     decorate_parser.add_argument('taxonomy_file', help='file indicating taxonomy of extant taxa')
     decorate_parser.add_argument('output_tree', help='decorated tree')
+    decorate_parser.add_argument('--skip_rd_refine', help="skip refinement of taxonomy based on relative divergence information", action='store_true')
     decorate_parser.add_argument('-t', '--trusted_taxa_file', help="file indicating trusted taxonomic groups to use for inferring distribution (default: all taxa)", default=None)
     decorate_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa when inferring distribution', type=int, default=2)
     decorate_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa when inferring distribution (default: 0)", type=float, default=0.0)
