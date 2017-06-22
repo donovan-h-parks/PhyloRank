@@ -158,6 +158,8 @@ class Decorate():
             support, _taxon, _aux_info = parse_label(node.label)
             if support:
                 node.label = create_label(support, None, None)
+            else:
+                node.label = None
                     
     def _assign_taxon_labels(self, fmeasure_for_taxa):
         """Assign taxon labels to nodes.
@@ -188,26 +190,32 @@ class Decorate():
 
         return placed_taxon
         
-    def _write_statistics_table(self, fmeasure_for_taxa, out_table):
+    def _write_statistics_table(self, fmeasure_for_taxa, taxonomy, out_table):
         """Write table containing statistics for each taxon.
         
         Parameters
         ----------
         fmeasure_for_taxa : d[taxon] -> [(Node, F-measure, precision, recall)]
           Node with highest F-measure for each taxon.
+        taxonomy : d[unique_id] -> [d__<taxon>; ...; s__<taxon>]
+          Taxonomic information for taxa in tree of interest.
         out_table : str
           Output table to write statistics for assigned labels.  
         """
+        
+        # get extent taxa
+        extant_taxa = Taxonomy().extant_taxa(taxonomy)
     
         fout_table = open(out_table, 'w')
-        fout_table.write('Taxon\tF-measure\tPrecision\tRecall\n')
+        fout_table.write('Taxon\tTaxon in Tree\tF-measure\tPrecision\tRecall\n')
         for taxon in Taxonomy().sort_taxa(fmeasure_for_taxa.keys()):     
             if len(fmeasure_for_taxa[taxon]) != 1:
                 self.logger.error('Multiple positions specified for taxon label.')
                 sys.exit()
                 
+            num_genomes = len(extant_taxa[taxon])
             node, fmeasure, precision, recall = fmeasure_for_taxa[taxon][0]
-            fout_table.write('%s\t%.4f\t%.4f\t%.4f\n' % (taxon, fmeasure, precision, recall))
+            fout_table.write('%s\t%d\t%.4f\t%.4f\t%.4f\n' % (taxon, num_genomes, fmeasure, precision, recall))
                 
         fout_table.close()
         
@@ -372,6 +380,9 @@ class Decorate():
                                 
             rank_prefix = taxon[0:3]
             rank_index = Taxonomy.rank_prefixes.index(rank_prefix)
+            if rank_index not in median_rank_rd:
+                del fmeasure_for_taxa[taxon]
+                continue # handles trees without any defined taxa at a given rank (e.g. species)
             rd = median_rank_rd[rank_index]
 
             # Find node closest to median distance, but making sure
@@ -479,14 +490,14 @@ class Decorate():
         self.logger.info('Calculating F-measure statistic for each taxa.')
         fmeasure_for_taxa = self._fmeasure(tree, taxonomy)
 
-        # place labels with only one acceptable position and calculate
-        # the relative divergence thresholds from these as a guide for
-        # placing the remaining labels
-        self.logger.info('Placing labels with unambiguous position in tree.')
-        placed_taxon = self._assign_taxon_labels(fmeasure_for_taxa)
-
         # calculating relative
         if not skip_rd_refine:
+            # place labels with only one acceptable position and calculate
+            # the relative divergence thresholds from these as a guide for
+            # placing the remaining labels
+            self.logger.info('Placing labels with unambiguous position in tree.')
+            placed_taxon = self._assign_taxon_labels(fmeasure_for_taxa)
+        
             self.logger.info('Establishing median relative divergence for taxonomic ranks.')
             median_rank_rd = self._median_rank_rd(tree, 
                                                     placed_taxon, 
@@ -512,13 +523,12 @@ class Decorate():
 
             # place all labels on tree
             self.logger.info('Placing labels on tree.')
-            self._strip_taxon_labels(tree)
             placed_taxon = self._assign_taxon_labels(fmeasure_for_taxa)
         
         # write statistics for placed taxon labels
         self.logger.info('Writing out statistics for taxa.')
         out_table = output_tree + '-table'
-        self._write_statistics_table(fmeasure_for_taxa, out_table)
+        self._write_statistics_table(fmeasure_for_taxa, taxonomy, out_table)
                                           
         # output taxonomy of extant taxa on tree
         self.logger.info('Writing out taxonomy for extant taxa.')
