@@ -3,9 +3,8 @@
 <b>[This project is in active development, you are welcomed to use this software though it may be unstable.]</b>
 
 [![version status](https://img.shields.io/pypi/v/phylorank.svg)](https://pypi.python.org/pypi/phylorank)
-[![downloads](https://img.shields.io/pypi/dm/phylorank.svg)](https://pypi.python.org/pypi/phylorank)
 
-PhyloRank is ...
+PhyloRank provide functionality for calculating and investigating the relative evolutionary divergence (RED) of taxa in a tree. 
 
 ## Install
 
