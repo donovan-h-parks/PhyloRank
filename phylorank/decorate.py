@@ -94,12 +94,19 @@ class Decorate():
             self.logger.info('Processing %d taxa at %s rank.' % (len(taxa_at_rank[rank_index]),
                                                                     Taxonomy.rank_labels[rank_index].capitalize()))
             
-            for taxon in taxa_at_rank[rank_index]:  
+            for taxon in taxa_at_rank[rank_index]: 
                 if rank_index == 0:
                     # processing taxa at the domain is a special case
                     taxon_parent_node = tree.seed_node
                 else:
-                    parent_taxon = taxon_parents[taxon][-1]
+                    # find first named parent 
+                    # e.g., Cyanobacteria for Synechococcales in d__Bacteria;p__Cyanobacteria;c__;o__Synechococcales
+                    parent_taxon = 'x__'
+                    parent_index = rank_index-1
+                    while len(parent_taxon) == 3 and parent_index != -1:
+                        parent_taxon = taxon_parents[taxon][parent_index]
+                        parent_index = parent_index - 1
+
                     if parent_taxon in fmeasure_for_taxa:
                         # only need to process the lineage below the parent node,
                         # but must take the MRCA if the placement of the parent
@@ -156,7 +163,7 @@ class Decorate():
         
         for node in tree.internal_nodes():
             support, _taxon, _aux_info = parse_label(node.label)
-            if support:
+            if support is not None:
                 node.label = create_label(support, None, None)
             else:
                 node.label = None
@@ -480,7 +487,7 @@ class Decorate():
         # read taxonomy and trim to taxa in tree
         self.logger.info('Reading taxonomy.')
         full_taxonomy = Taxonomy().read(taxonomy_file)
-        
+ 
         taxonomy = {}
         for leaf in tree.leaf_node_iter():
             taxonomy[leaf.taxon.label] = full_taxonomy.get(leaf.taxon.label, Taxonomy.rank_prefixes)

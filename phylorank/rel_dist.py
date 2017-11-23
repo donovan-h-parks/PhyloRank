@@ -71,7 +71,7 @@ class RelativeDistance():
 
             node.mean_dist = avg_div
 
-    def decorate_rel_dist(self, tree):
+    def decorate_rel_dist(self, tree, mblet=False):
         """Calculate relative distance to each internal node.
 
         Parameters
@@ -88,28 +88,31 @@ class RelativeDistance():
         """
 
         self._avg_descendant_rate(tree)
-
-        for node in tree.preorder_node_iter():
-            if node == tree.seed_node:
-                node.rel_dist = 0.0
-            elif node.is_leaf():
-                node.rel_dist = 1.0
-            else:
-                a = node.edge_length
-                b = node.mean_dist
-                x = node.parent_node.rel_dist
-
-                if (a + b) != 0:
-                    rel_dist = x + (a / (a + b)) * (1.0 - x)
+        if mblet:
+            for node in tree.preorder_node_iter():
+                node.rel_dist = node.mean_dist
+        else:
+            for node in tree.preorder_node_iter():
+                if node == tree.seed_node:
+                    node.rel_dist = 0.0
+                elif node.is_leaf():
+                    node.rel_dist = 1.0
                 else:
-                    # internal node has zero length to parent,
-                    # so should have the same relative distance
-                    # as the parent node
-                    rel_dist = x
+                    a = node.edge_length
+                    b = node.mean_dist
+                    x = node.parent_node.rel_dist
 
-                node.rel_dist = rel_dist
+                    if (a + b) != 0:
+                        rel_dist = x + (a / (a + b)) * (1.0 - x)
+                    else:
+                        # internal node has zero length to parent,
+                        # so should have the same relative distance
+                        # as the parent node
+                        rel_dist = x
 
-    def rel_dist_to_named_clades(self, tree):
+                    node.rel_dist = rel_dist
+
+    def rel_dist_to_named_clades(self, tree, mblet=False):
         """Determine relative distance to specific taxa.
 
         Parameters
@@ -123,17 +126,15 @@ class RelativeDistance():
         """
 
         # calculate relative distance for all nodes
-        self.decorate_rel_dist(tree)
-
-        # assign internal nodes with ranks from
+        self.decorate_rel_dist(tree, mblet)
+        
+        # tabulate values for internal nodes with ranks
         rel_dists = defaultdict(dict)
         for node in tree.preorder_node_iter(lambda n: n != tree.seed_node):
             if not node.label or node.is_leaf():
                 continue
 
-            # check for support value
             _support, taxon_name, _auxiliary_info = parse_label(node.label)
-
             if not taxon_name:
                 continue
 

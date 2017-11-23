@@ -139,9 +139,9 @@ class RobustnessPlot(AbstractPlot):
 
         print 'Assessing distribution over %d groups.' % len(groups_to_consider)
 
-        # calculate relative distance for full tree
+        # calculate RED for full tree
         print ''
-        print 'Calculating relative distance over full tree.'
+        print 'Calculating RED over full tree.'
         tree = dendropy.Tree.get_from_path(full_tree_file, 
                                             schema='newick', 
                                             rooting='force-rooted', 
@@ -151,9 +151,9 @@ class RobustnessPlot(AbstractPlot):
             print ''
             print '[Warning] Full tree contains polyphyletic groups.'
 
-        # calculate relative distance for dereplicated tree
+        # calculate RED for dereplicated tree
         print ''
-        print 'Calculating relative distance over dereplicated tree.'
+        print 'Calculating RED over dereplicated tree.'
         tree = dendropy.Tree.get_from_path(derep_tree_file, 
                                             schema='newick', 
                                             rooting='force-rooted', 
@@ -164,7 +164,7 @@ class RobustnessPlot(AbstractPlot):
         groups_to_consider = groups_to_consider - polyphyletic
         print 'Assessing distriubtion over %d groups after removing polyphyletic groups in original trees.' % len(groups_to_consider)
 
-        # calculate relative distance to each group in each tree
+        # calculate RED to each group in each tree
         print ''
         rel_dists = defaultdict(list)
         dist_components = defaultdict(list)
@@ -198,7 +198,7 @@ class RobustnessPlot(AbstractPlot):
         perc90 = []
         labels = []
         fout = open(output_prefix + '.tsv', 'w')
-        fout.write('Taxon\tP10\tP90\tP90-P10\tMean rel. dist\tMean dist to parent\tMean dist to leaves\tOriginal rel. dist.\tOrigial dist to parent\tOriginal dist to leaves\n')
+        fout.write('Taxon\tP10\tP90\tP90-P10\tMean RED\tMean dist to parent\tMean dist to leaves\tOriginal RED\tOrigial dist to parent\tOriginal dist to leaves\n')
         for i, taxon in enumerate(sorted(rel_dists.keys(), reverse=True)):
             labels.append(taxon + ' (%d)' % (len(rel_dists[taxon])))
 

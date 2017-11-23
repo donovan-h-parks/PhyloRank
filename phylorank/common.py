@@ -51,7 +51,13 @@ def read_taxa_file(taxa_file):
 
     return taxa
 
-def filter_taxa_for_dist_inference(tree, taxonomy, trusted_taxa, min_children, min_support):
+def filter_taxa_for_dist_inference(tree, 
+                                    taxonomy, 
+                                    trusted_taxa, 
+                                    min_children, 
+                                    min_support,
+                                    fmeasure = None,
+                                    min_fmeasure = None):
     """Determine taxa to use for inferring distribution of relative divergences.
 
     Parameters
@@ -68,15 +74,6 @@ def filter_taxa_for_dist_inference(tree, taxonomy, trusted_taxa, min_children, m
         Only consider taxa with at least this level of support when inferring distribution.
     """
 
-    # determine children taxa for each named group
-    taxon_children = Taxonomy().taxon_children(taxonomy)
-
-    # get all named groups
-    taxa_for_dist_inference = set()
-    for taxon_id, taxa in taxonomy.iteritems():
-        for taxon in taxa:
-            taxa_for_dist_inference.add(taxon)
-
     # sanity check species names as these are a common problem
     species = set()
     for taxon_id, taxa in taxonomy.iteritems():
@@ -91,40 +88,48 @@ def filter_taxa_for_dist_inference(tree, taxonomy, trusted_taxa, min_children, m
                 
             species.add(species_name)
 
-    # restrict taxa to those with a sufficient number of named children
-    # Note: a taxonomic group with no children will not end up in the
-    # taxon_children data structure so care must be taken when applying
-    # this filtering criteria.
-    if min_children > 0:
-        valid_taxa = set()
-        for taxon, children_taxa in taxon_children.iteritems():
-            if len(children_taxa) >= min_children:
-                valid_taxa.add(taxon)
+    # restrict taxa to those with a sufficient number 
+    # of named children and sufficient support
+    taxa_for_dist_inference = set()
+    for node in tree.preorder_node_iter():
+        if not node.label or node.is_leaf():
+            continue
 
-        taxa_for_dist_inference.intersection_update(valid_taxa)
+        support, taxon, _auxiliary_info = parse_label(node.label)
+        if not taxon:
+            continue
+            
+        taxon = taxon.split(';')[-1].strip() # get most specific taxon from compound names 
+                                             # (e.g. p__Armatimonadetes; c__Chthonomonadetes)
+                                             
+        if support and min_support > 0 and support < min_support:
+            continue
 
-        # explicitly add in the species since they have no
-        # children and thus be absent from the taxon_child dictionary
-        taxa_for_dist_inference.update(species)
+        if not support and min_support > 0:
+            # no support value, so inform user if they were trying to filter on this property
+            print '[Error] Tree does not contain support values. As such, --min_support must be set to 0.'
+            sys.exit()
+            
+        if fmeasure and fmeasure[taxon] < min_fmeasure:
+            continue
+            
+        # count number of subordinate children
+        rank_prefix = taxon[0:3]
+        if min_children > 0 and rank_prefix != 's__':
+            child_rank_index = Taxonomy().rank_index[rank_prefix] + 1
+            child_rank_prefix = Taxonomy.rank_prefixes[child_rank_index]
+            subordinate_taxa = set()
+            for leaf in node.leaf_iter():
+                taxa = taxonomy.get(leaf.taxon.label, Taxonomy.rank_prefixes)
+                if len(taxa) > child_rank_index:
+                    sub_taxon = taxa[child_rank_index]
+                    if sub_taxon != Taxonomy.rank_prefixes[child_rank_index] and sub_taxon.startswith(child_rank_prefix):
+                        subordinate_taxa.add(sub_taxon)
 
-    # restrict taxa used for inferring distribution to those with sufficient support
-    if min_support > 0:
-        for node in tree.preorder_node_iter():
-            if not node.label or node.is_leaf():
+            if len(subordinate_taxa) < min_children:
                 continue
-
-            # check for support value
-            support, taxon_name, _auxiliary_info = parse_label(node.label)
-
-            if not taxon_name:
-                continue
-
-            if support and float(support) < min_support:
-                taxa_for_dist_inference.difference_update([taxon_name])
-            elif not support and min_support > 0:
-                # no support value, so inform user if they were trying to filter on this property
-                print '[Error] Tree does not contain support values. As such, --min_support should be set to 0.'
-                continue
+                
+        taxa_for_dist_inference.add(taxon)
 
     # restrict taxa used for inferring distribution to the trusted set
     if trusted_taxa:

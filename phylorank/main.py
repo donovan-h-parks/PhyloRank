@@ -26,8 +26,6 @@ from phylorank.newick import parse_label
 from phylorank.outliers import Outliers
 from phylorank.rd_ranks import RdRanks
 from phylorank.bl_dist import BranchLengthDistribution
-from phylorank.tree_diff import TreeDiff
-from phylorank.tax_diff import TaxDiff
 from phylorank.plot.robustness_plot import RobustnessPlot
 from phylorank.plot.distribution_plot import DistributionPlot
 from phylorank.decorate import Decorate
@@ -53,6 +51,7 @@ class OptionsParser():
         """Create information for identifying taxnomic outliers"""
 
         check_file_exists(options.input_tree)
+        check_file_exists(options.taxonomy_file)
 
         if options.plot_taxa_file:
             check_file_exists(options.plot_taxa_file)
@@ -70,10 +69,16 @@ class OptionsParser():
                 options.plot_taxa_file,
                 options.plot_dist_taxa_only,
                 options.plot_domain,
+                options.highlight_polyphyly,
+                options.highlight_taxa_file,
                 options.trusted_taxa_file,
                 options.fixed_root,
                 options.min_children,
                 options.min_support,
+                options.mblet,
+                options.fmeasure_table,
+                options.min_fmeasure,
+                options.fmeasure_mono,
                 options.verbose_table)
 
         self.logger.info('Done.')
@@ -120,6 +125,8 @@ class OptionsParser():
 
             if r2 != 'NA':
                 rank_prefix = taxon[0:3]
+                if rank_prefix == 'd__':
+                    continue
                 rank_label = Taxonomy.rank_labels[Taxonomy.rank_prefixes.index(rank_prefix)]
                 rank_median = median_reds[rank_label]
             
@@ -139,58 +146,6 @@ class OptionsParser():
                 fout.write('\n')
             
         fout.close()
-        
-    def tree_diff(self, options):
-        """Tree diff command."""
-        
-        check_file_exists(options.input_tree1)
-        check_file_exists(options.input_tree2)
-        
-        if not os.path.exists(options.output_dir):
-            os.makedirs(options.output_dir)
-        
-        td = TreeDiff()
-        td.run(options.input_tree1,
-                options.input_tree2,
-                options.output_dir,
-                options.min_support,
-                options.min_taxa,
-                options.named_only)
-        
-        self.logger.info('Done.')
-        
-    def tree_tax_diff(self, options):
-        """Taxonomy difference command."""
-        
-        check_file_exists(options.input_tree1)
-        check_file_exists(options.input_tree2)
-        
-        if not os.path.exists(options.output_dir):
-            os.makedirs(options.output_dir)
-        
-        td = TaxDiff()
-        td.tree_tax_diff(options.input_tree1,
-                            options.input_tree2,
-                            options.output_dir)
-        
-        self.logger.info('Done.')
-        
-    def tax_diff(self, options):
-        """Taxonomy difference command."""
-        
-        check_file_exists(options.tax1_file)
-        check_file_exists(options.tax2_file)
-        
-        if not os.path.exists(options.output_dir):
-            os.makedirs(options.output_dir)
-        
-        td = TaxDiff()
-        td.tax_diff(options.tax1_file,
-                options.tax2_file,
-                options.include_user_taxa,
-                options.output_dir)
-        
-        self.logger.info('Done.')
         
     def dist_plot(self, options):
         """Distribution plot command"""
@@ -247,79 +202,10 @@ class OptionsParser():
                         options.output_tree)
 
         self.logger.info('Finished decorating tree.')
-   
-    def pull(self, options):
-        """Pull command"""
-        check_file_exists(options.input_tree)
-
-        t = Taxonomy().read_from_tree(options.input_tree) #, False)
-        if not options.no_rank_fill:
-            for taxon_id, taxa in t.iteritems():
-                t[taxon_id] = Taxonomy().fill_missing_ranks(taxa)
-
-        Taxonomy().write(t, options.output_file)
-
-        self.logger.info('Taxonomy strings written to: %s' % options.output_file)
-
-    def validate(self, options):
-        """Validate command"""
-
-        check_file_exists(options.taxonomy_file)
-
-        taxonomy = Taxonomy()
-        t = taxonomy.read(options.taxonomy_file)
-
-        errors = taxonomy.validate(t,
-                                      check_prefixes=not options.no_prefix,
-                                      check_ranks=not options.no_all_ranks,
-                                      check_hierarchy=not options.no_hierarhcy,
-                                      check_species=not options.no_species,
-                                      check_group_names=True,
-                                      check_duplicate_names=True,
-                                      report_errors=True)
-
-        invalid_ranks, invalid_prefixes, invalid_species_name, invalid_hierarchies, invalid_group_name = errors
-
-        if sum([len(e) for e in errors]) == 0:
-            self.logger.info('No errors identified in taxonomy file.')
-        else:
-            self.logger.info('Identified %d incomplete taxonomy strings.' % len(invalid_ranks))
-            self.logger.info('Identified %d rank prefix errors.' % len(invalid_prefixes))
-            self.logger.info('Identified %d invalid species names.' % len(invalid_species_name))
-            self.logger.info('Identified %d taxa with multiple parents.' % len(invalid_hierarchies))
-            self.logger.info('Identified %d invalid group names.' % len(invalid_group_name))
-
-    def append(self, options):
-        """Append command"""
-        check_file_exists(options.input_tree)
-        check_file_exists(options.taxonomy_file)
-
-        taxonomy = Taxonomy().read(options.taxonomy_file)
-
-        tree = dendropy.Tree.get_from_path(options.input_tree, 
-                                            schema='newick', 
-                                            rooting='force-rooted', 
-                                            preserve_underscores=True)
-        
-        for n in tree.leaf_node_iter():
-            taxa_str = taxonomy.get(n.label, None)
-            if taxa_str == None:
-                self.logger.error('Taxonomy file does not contain an entry for %s.' % n.label)
-                sys.exit(-1)
-            n.label = n.label + '|' + ';'.join(taxonomy[n.label])
-
-        tree.write_to_path(options.output_tree, 
-                            schema='newick', 
-                            suppress_rooting=True, 
-                            unquoted_underscores=True)
-
-        self.logger.info('')
-        self.logger.info('  Decorated tree written to: %s' % options.output_tree)
-
-        self.time_keeper.print_time_stamp()
 
     def taxon_stats(self, options):
         """Taxon stats command"""
+        
         check_file_exists(options.taxonomy_file)
 
         taxonomy = Taxonomy().read(options.taxonomy_file)
@@ -537,20 +423,8 @@ class OptionsParser():
             self.compare_red(options)   
         elif(options.subparser_name == 'mark_tree'):
             self.mark_tree(options)
-        elif(options.subparser_name == 'tree_diff'):
-            self.tree_diff(options)
-        elif(options.subparser_name == 'tree_tax_diff'):
-            self.tree_tax_diff(options)
-        elif(options.subparser_name == 'tax_diff'):
-            self.tax_diff(options)
         elif(options.subparser_name == 'decorate'):
             self.decorate(options)
-        elif(options.subparser_name == 'pull'):
-            self.pull(options)
-        elif(options.subparser_name == 'validate'):
-            self.validate(options)
-        elif(options.subparser_name == 'append'):
-            self.append(options)
         elif(options.subparser_name == 'taxon_stats'):
             self.taxon_stats(options)
         elif(options.subparser_name == 'robustness_plot'):

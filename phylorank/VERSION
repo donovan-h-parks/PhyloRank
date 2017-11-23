@@ -1,1 +1,5 @@
-0.0.29
+0.0.33
+- simplified interface
+0.0.32
+- fixed bug causing taxa with no defined parent to be missed by 'decorate'
+  e.g., o__Synechococcales in the NCBI taxonomy; p__Cyanobacteria;c__;o__Synechococcales

@@ -82,9 +82,9 @@ class Outliers(AbstractPlot):
         input_tree : Dendropy Tree
           Tree to rerooted.
         taxonomy : dict
-            Taxonomy for taxa.
-        outgroup : iterable
-          Labels of taxa in outgroup.
+          Taxonomy for taxa.
+        outgroup_taxa : str
+          Desired outgroup.
           
         Returns
         -------
@@ -154,7 +154,15 @@ class Outliers(AbstractPlot):
         
         return new_tree
 
-    def _distribution_plot(self, rel_dists, taxa_for_dist_inference, distribution_table, plot_file):
+    def _distribution_plot(self, 
+                            rel_dists, 
+                            taxa_for_dist_inference, 
+                            highlight_polyphyly,
+                            highlight_taxa,
+                            distribution_table,
+                            fmeasure,
+                            fmeasure_mono,
+                            plot_file):
         """Create plot showing the distribution of taxa at each taxonomic rank.
 
         Parameters
@@ -172,7 +180,6 @@ class Outliers(AbstractPlot):
         self.fig.clear()
         self.fig.set_size_inches(12, 6)
         ax = self.fig.add_subplot(111)
-        
         
         # create normal distributions
         for i, rank in enumerate(sorted(rel_dists.keys())):
@@ -195,22 +202,21 @@ class Outliers(AbstractPlot):
                 continue
                 
             p10, p50, p90 = np_percentile(v, [10, 50, 90])
-            ax.plot((p10, p10), (i, i + 0.25), c=(0.3, 0.3, 0.3), lw=2, zorder=2)
-            ax.plot((p50, p50), (i, i + 0.5), c=(0.3, 0.3, 0.3), lw=2, zorder=2)
-            ax.plot((p90, p90), (i, i + 0.25), c=(0.3, 0.3, 0.3), lw=2, zorder=2)
+            #ax.plot((p10, p10), (i, i + 0.25), c=(0.3, 0.3, 0.3), lw=2, zorder=2)
+            ax.plot((p50, p50), (i, i + 0.5), c=(0.0, 0.0, 1.0), lw=2, zorder=2)
+            #ax.plot((p90, p90), (i, i + 0.25), c=(0.3, 0.3, 0.3), lw=2, zorder=2)
 
-            for b in [-0.2, -0.1, 0.1, 0.2]:
+            for b in [-0.1, 0.1]:
                 boundary = p50 + b
                 if boundary < 1.0 and boundary > 0.0:
                     if abs(b) == 0.1:
-                        c = (1.0, 0.65, 0.0)  # orange
+                        c = (0.0, 0.0, 0.0)
                     else:
                         c = (1.0, 0.0, 0.0)
-                    ax.plot((boundary, boundary), (i, i + 0.5), c=c, lw=2, zorder=2)
+                    ax.plot((boundary, boundary), (i, i + 0.25), c=c, lw=2, zorder=2)
 
             percentiles[i] = [p10, p50, p90]
 
-    
         # create scatter plot and results table
         fout = open(distribution_table, 'w')
         fout.write('Taxa\tRelative Distance\tP10\tMedian\tP90\tPercentile outlier\n')
@@ -221,26 +227,24 @@ class Outliers(AbstractPlot):
         rank_labels = []
         for i, rank in enumerate(sorted(rel_dists.keys())):
             rank_label = Taxonomy.rank_labels[rank]
-            rank_labels.append(rank_label + ' (%d)' % len(rel_dists[rank]))
+            rank_labels.append(rank_label.capitalize()  + ' (%d)' % len(rel_dists[rank]))
             
             mono = []
             poly = []
-            no_inference = []
+            nearly_mono = []
             for clade_label, dist in rel_dists[rank].iteritems():
                 x.append(dist)
                 y.append(i)
                 labels.append(clade_label)
 
-                if is_integer(clade_label.split('^')[-1]):
-                    # taxa with a numerical suffix after a caret indicate 
-                    # polyphyletic groups when decorated with tax2tree
-                    c.append((1.0, 0.0, 0.0))
+                if ((highlight_polyphyly and fmeasure[clade_label] < fmeasure_mono) or clade_label in highlight_taxa):
+                    c.append((1.0,0.0,0.0))
                     poly.append(dist)
-                elif clade_label not in taxa_for_dist_inference:
-                    c.append((0.3, 0.3, 0.3))
-                    no_inference.append(dist)
+                elif (highlight_polyphyly and fmeasure[clade_label] != 1.0):
+                    c.append((255.0/255,187.0/255,120.0/255))
+                    nearly_mono.append(dist)
                 else:
-                    c.append((0.0, 0.0, 1.0))
+                    c.append((152.0/255,223.0/255,138.0/255))
                     mono.append(dist)
             
                 # report results
@@ -256,68 +260,59 @@ class Outliers(AbstractPlot):
                 fout.write('%s\t%.2f\t%.2f\t%.2f\t%.2f\t%s\n' % tuple(v))
         
             # histogram for each rank
-            mono = np_array(mono)
-            no_inference = np_array(no_inference)
-            poly = np_array(poly)
             binwidth = 0.025
             bins = np_arange(0, 1.0 + binwidth, binwidth)
+            max_bin_count = max(np_histogram(mono + nearly_mono + poly, bins=bins)[0])
 
-            d = len(mono) + len(poly) + len(no_inference)
-            if d == 0:
+            num_taxa = len(mono) + len(poly) + len(nearly_mono)
+            if num_taxa == 0:
                 break
-                
-            w = float(len(mono)) / d
-            n = 0
+            
+            mono = np_array(mono)
+            nearly_mono = np_array(nearly_mono)
+            poly = np_array(poly)
+            
+            bottom_mono = 0
             if len(mono) > 0:
-                mono_max_count = max(np_histogram(mono, bins=bins)[0])
-                mono_weights = np_ones_like(mono) * (1.0 / mono_max_count)
-
-                n, b, p = ax.hist(mono, bins=bins,
-                          color=(0.0, 0.0, 1.0),
-                          alpha=0.25,
-                          weights=0.9 * w * mono_weights,
+                bottom_mono, b, p = ax.hist(mono, bins=bins,
+                          color=(152.0/255,223.0/255,138.0/255),
+                          alpha=0.5,
+                          weights=0.9 * (1.0 / max_bin_count) * np_ones_like(mono),
                           bottom=i,
                           lw=0,
                           zorder=0)
                       
-            if len(no_inference) > 0:
-                no_inference_max_count = max(np_histogram(no_inference, bins=bins)[0])
-                no_inference_weights = np_ones_like(no_inference) * (1.0 / no_inference_max_count)
-
-                ax.hist(no_inference, bins=bins,
-                          color=(0.3, 0.3, 0.3),
-                          alpha=0.25,
-                          weights=0.9 * (1.0 - w) * no_inference_weights,
-                          bottom=i + n,
-                          lw=0,
-                          zorder=0)
+            bottom_nearly_mono = 0
+            if len(nearly_mono) > 0:
+                bottom_nearly_mono, b, p = ax.hist(nearly_mono, bins=bins,
+                                                      color=(255.0/255,187.0/255,120.0/255),
+                                                      alpha=0.5,
+                                                      weights=0.9 * (1.0 / max_bin_count) * np_ones_like(nearly_mono),
+                                                      bottom=i + bottom_mono,
+                                                      lw=0,
+                                                      zorder=0)
 
             if len(poly) > 0:
-                poly_max_count = max(np_histogram(poly, bins=bins)[0])
-                poly_weights = np_ones_like(poly) * (1.0 / poly_max_count)
-
                 ax.hist(poly, bins=bins,
                           color=(1.0, 0.0, 0.0),
-                          alpha=0.25,
-                          weights=0.9 * (1.0 - w) * poly_weights,
-                          bottom=i + n,
+                          alpha=0.5,
+                          weights=0.9 * (1.0 / max_bin_count) * np_ones_like(poly),
+                          bottom=i + bottom_mono + bottom_nearly_mono,
                           lw=0,
                           zorder=0)
-                          
         fout.close()
 
-    
         # overlay scatter plot elements
         scatter = ax.scatter(x, y, alpha=0.5, s=48, c=c, zorder=1)
 
         # set plot elements
         ax.grid(color=(0.8, 0.8, 0.8), linestyle='dashed')
 
-        ax.set_xlabel('relative distance')
+        ax.set_xlabel('Relative Evolutionary Divergence')
         ax.set_xticks(np_arange(0, 1.05, 0.1))
         ax.set_xlim([-0.05, 1.05])
 
-        ax.set_ylabel('rank (no. taxa)')
+        ax.set_ylabel('Rank (no. taxa)')
         ax.set_yticks(xrange(0, len(rel_dists)))
         ax.set_ylim([-0.2, len(rel_dists) - 0.01])
         ax.set_yticklabels(rank_labels)
@@ -439,7 +434,14 @@ class Outliers(AbstractPlot):
                 
         return median_for_rank
         
-    def _distribution_summary_plot(self, phylum_rel_dists, taxa_for_dist_inference, plot_file):
+    def _distribution_summary_plot(self, 
+                                    phylum_rel_dists, 
+                                    taxa_for_dist_inference, 
+                                    highlight_polyphyly,
+                                    highlight_taxa,
+                                    fmeasure,
+                                    fmeasure_mono,
+                                    plot_file):
         """Summary plot showing the distribution of taxa at each taxonomic rank under different rootings.
 
         Parameters
@@ -468,15 +470,15 @@ class Outliers(AbstractPlot):
                 continue
             
             p10, p50, p90 = np_percentile(v, [10, 50, 90])
-            ax.plot((p10, p10), (i, i + 0.25), c=(0.3, 0.3, 0.3), lw=2, zorder=2)
-            ax.plot((p50, p50), (i, i + 0.5), c=(0.3, 0.3, 0.3), lw=2, zorder=2)
-            ax.plot((p90, p90), (i, i + 0.25), c=(0.3, 0.3, 0.3), lw=2, zorder=2)
+            #ax.plot((p10, p10), (i, i + 0.25), c=(0.3, 0.3, 0.3), lw=2, zorder=2)
+            ax.plot((p50, p50), (i, i + 0.5), c=(0.0, 0.0, 1.0), lw=2, zorder=2)
+            #ax.plot((p90, p90), (i, i + 0.25), c=(0.3, 0.3, 0.3), lw=2, zorder=2)
 
-            for b in [-0.2, -0.1, 0.1, 0.2]:
+            for b in [-0.1, 0.1]:
                 boundary = p50 + b
                 if boundary < 1.0 and boundary > 0.0:
                     if abs(b) == 0.1:
-                        c = (1.0, 0.65, 0.0)  # orange
+                        c = (0.0, 0.0, 0.0)
                     else:
                         c = (1.0, 0.0, 0.0)
                     ax.plot((boundary, boundary), (i, i + 0.5), c=c, lw=2, zorder=2)
@@ -491,84 +493,74 @@ class Outliers(AbstractPlot):
         rank_labels = []
         for i, rank in enumerate(sorted(medians_for_taxa.keys())):
             rank_label = Taxonomy.rank_labels[rank]
-            rank_labels.append(rank_label + ' (%d)' % len(medians_for_taxa[rank]))
+            rank_labels.append(rank_label.capitalize() + ' (%d)' % len(medians_for_taxa[rank]))
 
             mono = []
             poly = []
-            no_inference = []
+            near_mono = []
             for clade_label, dists in medians_for_taxa[rank].iteritems():
                 md = np_median(dists)
                 x.append(md)
                 y.append(i)
                 labels.append(clade_label)
 
-                if is_integer(clade_label.split('^')[-1]):
-                    # taxa with a numerical suffix after a caret indicate 
-                    # polyphyletic groups when decorated with tax2tree
-                    c.append((1.0, 0.0, 0.0))
+                if ((highlight_polyphyly and fmeasure[clade_label] < fmeasure_mono) or clade_label in highlight_taxa):
+                    c.append((1.0,0.0,0.0))
                     poly.append(md)
-                elif clade_label not in taxa_for_dist_inference:
-                    c.append((0.3, 0.3, 0.3))
-                    no_inference.append(md)
+                elif (highlight_polyphyly and fmeasure[clade_label] != 1.0):
+                    c.append((255.0/255,187.0/255,120.0/255))
+                    near_mono.append(md)
                 else:
-                    c.append((0.0, 0.0, 1.0))
+                    c.append((152.0/255,223.0/255,138.0/255))
                     mono.append(md)
 
             # histogram for each rank
-            n = 0
+            binwidth = 0.025
+            bins = np_arange(0, 1.0 + binwidth, binwidth)
+            max_bin_count = max(np_histogram(mono + near_mono + poly, bins=bins)[0])
+
+            mono_bottom = 0
+            near_mono_bottom = 0
+            mono = np_array(mono)
+            near_mono = np_array(near_mono)
+            poly = np_array(poly)
             if len(mono) > 0:
-                mono = np_array(mono)
-                no_inference = np_array(no_inference)
-                poly = np_array(poly)
-                binwidth = 0.025
-                bins = np_arange(0, 1.0 + binwidth, binwidth)
-
-                mono_max_count = max(np_histogram(mono, bins=bins)[0])
-                mono_weights = np_ones_like(mono) * (1.0 / mono_max_count)
-
-                w = float(len(mono)) / (len(mono) + len(poly) + len(no_inference))
-                n, b, p = ax.hist(mono, bins=bins,
-                          color=(0.0, 0.0, 1.0),
-                          alpha=0.25,
-                          weights=0.9 * w * mono_weights,
+                mono_bottom, b, p = ax.hist(mono, bins=bins,
+                          color=(152.0/255,223.0/255,138.0/255),
+                          alpha=0.5,
+                          weights=0.9 * (1.0 / max_bin_count) * np_ones_like(mono),
                           bottom=i,
                           lw=0,
                           zorder=0)
-                      
-            if len(no_inference) > 0:
-                no_inference_max_count = max(np_histogram(no_inference, bins=bins)[0])
-                no_inference_weights = np_ones_like(no_inference) * (1.0 / no_inference_max_count)
 
-                ax.hist(no_inference, bins=bins,
-                          color=(0.3, 0.3, 0.3),
-                          alpha=0.25,
-                          weights=0.9 * (1.0 - w) * no_inference_weights,
-                          bottom=i + n,
-                          lw=0,
-                          zorder=0)
+            if len(near_mono) > 0:
+                near_mono_bottom, b, p = ax.hist(near_mono, bins=bins,
+                                              color=(255.0/255,187.0/255,120.0/255),
+                                              alpha=0.5,
+                                              weights=0.9 * (1.0 / max_bin_count) * np_ones_like(near_mono),
+                                              bottom=i + mono_bottom,
+                                              lw=0,
+                                              zorder=0)
 
             if len(poly) > 0:
-                poly_max_count = max(np_histogram(poly, bins=bins)[0])
-                poly_weights = np_ones_like(poly) * (1.0 / poly_max_count)
-
                 ax.hist(poly, bins=bins,
                           color=(1.0, 0.0, 0.0),
-                          alpha=0.25,
-                          weights=0.9 * (1.0 - w) * poly_weights,
-                          bottom=i + n,
+                          alpha=0.5,
+                          weights=0.9 * (1.0 / max_bin_count) * np_ones_like(poly),
+                          bottom=i + mono_bottom + near_mono_bottom,
                           lw=0,
                           zorder=0)
-
+                          
         scatter = ax.scatter(x, y, alpha=0.5, s=48, c=c, zorder=1)
 
         # set plot elements
         ax.grid(color=(0.8, 0.8, 0.8), linestyle='dashed')
 
-        ax.set_xlabel('relative distance')
+        ax.set_xlabel('Relative Evolutionary Divergence')
         ax.set_xticks(np_arange(0, 1.05, 0.1))
         ax.set_xlim([-0.01, 1.01])
 
-        ax.set_ylabel('rank (no. taxa)')
+        ax.set_ylabel('Rank (no. taxa)')
         ax.set_yticks(xrange(0, len(medians_for_taxa)))
         ax.set_ylim([-0.2, len(medians_for_taxa) - 0.01])
         ax.set_yticklabels(rank_labels)
@@ -583,6 +575,7 @@ class Outliers(AbstractPlot):
 
         self.fig.tight_layout(pad=1)
         self.fig.savefig(plot_file, dpi=self.dpi)
+        self.fig.savefig(plot_file.replace('.png', '.svg'), dpi=self.dpi)
 
     def _median_summary_outlier_file(self, phylum_rel_dists,
                                             taxa_for_dist_inference,
@@ -692,11 +685,34 @@ class Outliers(AbstractPlot):
             n.edge_length = rd_to_parent
         
         return rel_dists
+        
+    def mblet(self, tree, taxa_for_dist_inference):
+        """Scale tree and calculate mean branch length to extent taxa.
+        
+        Parameters
+        ----------
+        tree : Tree
+          Dendropy tree.
+        taxa_for_dist_inference : set
+          Taxa to use for inference MBLET distributions.
+        """
+        
+        # calculate relative distance to taxa
+        rd = RelativeDistance()
+        rel_dists = rd.rel_dist_to_named_clades(tree, mblet=True)
+        
+        # create scaled tree
+        rd.decorate_rel_dist(tree)
+        for n in tree.preorder_node_iter(lambda n: n != tree.seed_node):
+            rd_to_parent = n.rel_dist - n.parent_node.rel_dist
+            n.edge_length = rd_to_parent
+        
+        return rel_dists
 
     def median_rd_over_phyla(self, 
                                 tree, 
                                 taxa_for_dist_inference,
-                                taxonomy):
+                                taxonomy=None):
         """Calculate the median relative divergence over all phyla rootings.
         
         Parameters
@@ -705,9 +721,11 @@ class Outliers(AbstractPlot):
           Dendropy tree.
         taxa_for_dist_inference : set
           Taxa to use for inference relative divergence distributions.
-        taxonomy : d[taxon_id] -> [d__, p__, ..., s__]
-          Taxonomy of extant taxa.
         """
+        
+        # read taxonomy from tree
+        if not taxonomy:
+            taxonomy = Taxonomy().read_from_tree(tree, warnings=False)
     
         # get list of phyla level lineages
         all_phyla = get_phyla_lineages(tree)
@@ -779,16 +797,37 @@ class Outliers(AbstractPlot):
                 
         fout.close()
         
+    def read_fmeasure(self, fmeasure_table):
+        """Read table with F-measure for taxa."""
+        
+        fmeasure = {}
+        with open(fmeasure_table) as f:
+            f.readline()
+            
+            for line in f:
+                line_split = line.strip().split('\t')
+                
+                taxa = line_split[0]
+                fmeasure[taxa] = float(line_split[2])
+                
+        return fmeasure
+        
     def run(self, input_tree, 
                     taxonomy_file, 
                     output_dir, 
                     plot_taxa_file,
                     plot_dist_taxa_only,
                     plot_domain,
+                    highlight_polyphyly,
+                    highlight_taxa_file,
                     trusted_taxa_file,
                     fixed_root,
                     min_children, 
                     min_support,
+                    mblet,
+                    fmeasure_table,
+                    min_fmeasure,
+                    fmeasure_mono,
                     verbose_table):
         """Determine distribution of taxa at each taxonomic rank.
 
@@ -817,7 +856,7 @@ class Outliers(AbstractPlot):
         verbose_table : boolean
           Print additional columns in output table.
         """
-
+        
         # read tree
         self.logger.info('Reading tree.')
         tree = dendropy.Tree.get_from_path(input_tree, 
@@ -827,25 +866,31 @@ class Outliers(AbstractPlot):
 
         input_tree_name = os.path.splitext(os.path.basename(input_tree))[0]
 
-        # pull taxonomy from tree
-        if not taxonomy_file:
-            self.logger.info('Reading taxonomy from tree.')
-            taxonomy_file = os.path.join(output_dir, '%s.taxonomy.tsv' % input_tree_name)
-            taxonomy = Taxonomy().read_from_tree(input_tree)
-            Taxonomy().write(taxonomy, taxonomy_file)
-        else:
-            self.logger.info('Reading taxonomy from file.')
-            taxonomy = Taxonomy().read(taxonomy_file)
+        # pull taxonomy from tree and file
+        self.logger.info('Reading taxonomy.')
+        taxonomy = Taxonomy().read(taxonomy_file)
+        tree_taxonomy = Taxonomy().read_from_tree(input_tree,warnings=False)
             
-        gtdb_parent_ranks = Taxonomy().parents(taxonomy)
+        gtdb_parent_ranks = Taxonomy().parents(tree_taxonomy)
 
         # read trusted taxa
         trusted_taxa = None
         if trusted_taxa_file:
             trusted_taxa = read_taxa_file(trusted_taxa_file)
+            
+        # read F-measure for taxa
+        fmeasure = None
+        if fmeasure_table:
+            fmeasure = self.read_fmeasure(fmeasure_table)
 
         # determine taxa to be used for inferring distribution
-        taxa_for_dist_inference = filter_taxa_for_dist_inference(tree, taxonomy, trusted_taxa, min_children, min_support)
+        taxa_for_dist_inference = filter_taxa_for_dist_inference(tree, 
+                                                                    taxonomy, 
+                                                                    trusted_taxa, 
+                                                                    min_children, 
+                                                                    min_support,
+                                                                    fmeasure,
+                                                                    min_fmeasure)
 
         # limit plotted taxa
         taxa_to_plot = None
@@ -853,14 +898,31 @@ class Outliers(AbstractPlot):
             taxa_to_plot = taxa_for_dist_inference
         elif plot_taxa_file:
             taxa_to_plot = read_taxa_file(plot_taxa_file)
+        else:
+            taxa_to_plot = filter_taxa_for_dist_inference(tree, 
+                                                            taxonomy, 
+                                                            trusted_taxa, 
+                                                            min_children, 
+                                                            min_support,
+                                                            None,
+                                                            0)
             
+        # highlight taxa
+        highlight_taxa = set()
+        if highlight_taxa_file:
+            for line in open(highlight_taxa_file):
+                highlight_taxa.add(line.strip().split('\t')[0])
+                
         # check if a single fixed root should be used
-        if fixed_root:
+        if fixed_root or mblet:
             self.logger.info('Using single fixed rooting for inferring distributions.')
-            rel_dists = self.rd_fixed_root(tree, taxa_for_dist_inference)
-
+            if not mblet:
+                rel_dists = self.rd_fixed_root(tree, taxa_for_dist_inference)
+            else:
+                rel_dists = self.mblet(tree, taxa_for_dist_inference)
+                
             # create fixed rooting style tables and plots
-            distribution_table = os.path.join(output_dir, '%s.tsv' % input_tree_name)
+            distribution_table = os.path.join(output_dir, '%s.rank_distribution.tsv' % input_tree_name)
             plot_file = os.path.join(output_dir, '%s.png' % input_tree_name)
             self._distribution_plot(rel_dists, taxa_for_dist_inference, distribution_table, plot_file)
 
@@ -873,7 +935,13 @@ class Outliers(AbstractPlot):
             # calculate relative distance to taxa
             rd = RelativeDistance()
             rel_dists = rd.rel_dist_to_named_clades(tree)
-        
+            
+            # restrict to taxa of interest
+            if taxa_to_plot:
+                for r in rel_dists:
+                    for k in set(rel_dists[r].keys()) - set(taxa_to_plot):
+                        del rel_dists[r][k]
+            
             # report number of taxa at each rank
             print ''
             print 'Rank\tTaxa to Plot\tTaxa for Inference'
@@ -882,9 +950,28 @@ class Outliers(AbstractPlot):
                 print '%s\t%d\t%d' % (Taxonomy.rank_labels[rank], len(taxa), len(taxa_for_inference))
             print ''
         
-            phylum_rel_dists, rel_node_dists = self.median_rd_over_phyla(tree, 
-                                                                            taxa_for_dist_inference,
-                                                                            taxonomy)
+            # *** determine phyla for inferring distribution
+            if True:
+                phylum_rel_dists, rel_node_dists = self.median_rd_over_phyla(tree, 
+                                                                                taxa_for_dist_inference)
+            else:                                                                    
+                phyla_for_inference = filter_taxa_for_dist_inference(tree, 
+                                                                        taxonomy, 
+                                                                        trusted_taxa, 
+                                                                        2, 
+                                                                        min_support,
+                                                                        fmeasure,
+                                                                        min_fmeasure)
+                phylum_rel_dists, rel_node_dists = self.median_rd_over_phyla(tree, 
+                                                                                phyla_for_inference)
+                print ''
+                print 'Phyla for RED Inference:'
+                print ','.join(phylum_rel_dists)
+                phyla_file = os.path.join(output_dir, '%s.phyla.tsv' % input_tree_name)
+                fout = open(phyla_file, 'w')
+                for p in phylum_rel_dists:
+                    fout.write(p + '\n')
+                fout.close()
                                                                             
             # set edge lengths to median value over all rootings
             tree.seed_node.rel_dist = 0.0
@@ -900,10 +987,23 @@ class Outliers(AbstractPlot):
                 if not os.path.exists(phylum_dir):
                     os.makedirs(phylum_dir)
                     
+                # restrict to taxa of interest
+                if taxa_to_plot:
+                    for r in rel_dists:
+                        for k in set(rel_dists[r].keys()) - set(taxa_to_plot):
+                            del rel_dists[r][k]
+                    
                 # create distribution plot
                 distribution_table = os.path.join(phylum_dir, '%s.rank_distribution.tsv' % phylum)
                 plot_file = os.path.join(phylum_dir, '%s.rank_distribution.png' % phylum)
-                self._distribution_plot(rel_dists, taxa_for_dist_inference, distribution_table, plot_file)
+                self._distribution_plot(rel_dists, 
+                                        taxa_for_dist_inference,
+                                        highlight_polyphyly,
+                                        highlight_taxa,
+                                        distribution_table,
+                                        fmeasure,
+                                        fmeasure_mono,
+                                        plot_file)
 
                 median_outlier_table = os.path.join(phylum_dir, '%s.median_outlier.tsv' % phylum)
                 self._median_outlier_file(rel_dists, 
@@ -912,7 +1012,13 @@ class Outliers(AbstractPlot):
                                             median_outlier_table)
    
             plot_file = os.path.join(output_dir, '%s.png' % input_tree_name)
-            self._distribution_summary_plot(phylum_rel_dists, taxa_for_dist_inference, plot_file)
+            self._distribution_summary_plot(phylum_rel_dists, 
+                                            taxa_for_dist_inference,
+                                            highlight_polyphyly,
+                                            highlight_taxa,
+                                            fmeasure,
+                                            fmeasure_mono,
+                                            plot_file)
 
             median_outlier_table = os.path.join(output_dir, '%s.tsv' % input_tree_name)
             median_rank_file = os.path.join(output_dir, '%s.dict' % input_tree_name)
