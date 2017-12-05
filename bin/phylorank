@@ -60,7 +60,7 @@ def print_help():
     dist_plot   -> Plot distribution of taxa in each taxonomic rank
     mark_tree   -> Mark nodes with distribution information and predicted taxonomic ranks
 
-  Taxonomy decoration and inspection methods
+  Taxonomy decoration and inspection methods:
     decorate    -> Place internal taxonomic labels on tree
     taxon_stats -> Summary statistics of taxonomic groups
     rank_res    -> Calculate taxonomic resolution at each rank

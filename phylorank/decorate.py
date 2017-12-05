@@ -17,7 +17,7 @@
 
 import sys
 import logging
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 
 import dendropy
 from numpy import (median as np_median)
@@ -38,6 +38,9 @@ class Decorate():
         
         self.logger = logging.getLogger()
         
+        self.StatsTable = namedtuple('StatsTable', 
+                                        'node fmeasure precision recall taxa_in_lineage total_taxa num_leaves_with_taxa')
+                                                    
     def _fmeasure(self, tree, taxonomy):
         """Find node with highest F-measure for each taxon.
         
@@ -112,8 +115,8 @@ class Decorate():
                         # but must take the MRCA if the placement of the parent
                         # taxon is unresolved
                         parent_nodes = []
-                        for data in fmeasure_for_taxa[parent_taxon]:
-                            parent_nodes.append(data[0])
+                        for stat_table in fmeasure_for_taxa[parent_taxon]:
+                            parent_nodes.append(stat_table.node)
                             
                         if len(parent_nodes) == 1:
                             taxon_parent_node = parent_nodes[0]
@@ -143,13 +146,21 @@ class Decorate():
                         precision = float(taxa_in_lineage) / num_leaves_with_taxa
                         recall = float(taxa_in_lineage) / total_taxa
                         fmeasure = (2*precision*recall) / (precision + recall)
+                        
+                        stat_table = self.StatsTable(node=node, 
+                                        fmeasure=fmeasure, 
+                                        precision=precision, 
+                                        recall=recall, 
+                                        taxa_in_lineage=taxa_in_lineage, 
+                                        total_taxa=total_taxa, 
+                                        num_leaves_with_taxa=num_leaves_with_taxa)
 
                         if fmeasure > cur_taxon_fmeasure:
                             cur_taxon_fmeasure = fmeasure
-                            fmeasure_for_taxa[taxon] = [(node, fmeasure, precision, recall)]
+                            fmeasure_for_taxa[taxon] = [stat_table]
                         elif fmeasure == cur_taxon_fmeasure:
-                            fmeasure_for_taxa[taxon].append((node, fmeasure, precision, recall))
-                                             
+                            fmeasure_for_taxa[taxon].append(stat_table)
+
         return fmeasure_for_taxa
         
     def _strip_taxon_labels(self, tree):
@@ -186,7 +197,12 @@ class Decorate():
         for taxon in Taxonomy().sort_taxa(fmeasure_for_taxa.keys()): 
             if len(fmeasure_for_taxa[taxon]) == 1:
                 placed_taxon.add(taxon)
-                node, fmeasure, precision, recall = fmeasure_for_taxa[taxon][0]
+                
+                stat_table = fmeasure_for_taxa[taxon][0]
+                node = stat_table.node
+                fmeasure = stat_table.fmeasure
+                precision = stat_table.precision
+                recall = stat_table.recall
 
                 support, taxon_label, aux_info = parse_label(node.label)
                 if taxon_label:
@@ -214,15 +230,23 @@ class Decorate():
         extant_taxa = Taxonomy().extant_taxa(taxonomy)
     
         fout_table = open(out_table, 'w')
-        fout_table.write('Taxon\tTaxon in Tree\tF-measure\tPrecision\tRecall\n')
+        fout_table.write('Taxon\tNo. Expected in Tree\tF-measure\tPrecision\tRecall\tNo. Genomes from Taxon\tNo. Genome In Lineage\n')
         for taxon in Taxonomy().sort_taxa(fmeasure_for_taxa.keys()):     
             if len(fmeasure_for_taxa[taxon]) != 1:
                 self.logger.error('Multiple positions specified for taxon label.')
                 sys.exit()
                 
             num_genomes = len(extant_taxa[taxon])
-            node, fmeasure, precision, recall = fmeasure_for_taxa[taxon][0]
-            fout_table.write('%s\t%d\t%.4f\t%.4f\t%.4f\n' % (taxon, num_genomes, fmeasure, precision, recall))
+            
+            stat_table = fmeasure_for_taxa[taxon][0]
+            fout_table.write('%s\t%d\t%.4f\t%.4f\t%.4f\t%d\t%d\n' % (
+                                taxon, 
+                                num_genomes, 
+                                stat_table.fmeasure, 
+                                stat_table.precision, 
+                                stat_table.recall,
+                                stat_table.taxa_in_lineage,
+                                stat_table.num_leaves_with_taxa))
                 
         fout_table.close()
         
@@ -398,8 +422,8 @@ class Decorate():
             closest_index = None
             closest_dist = 1e9
             closest_node = None
-            for i, d in enumerate(fmeasure_for_taxa[taxon]):
-                cur_node = d[0]    
+            for i, stat_table in enumerate(fmeasure_for_taxa[taxon]):
+                cur_node = stat_table.node   
 
                 cur_rank_index = -1
                 _support, cur_taxon, _aux_info = parse_label(cur_node.label)
@@ -430,7 +454,7 @@ class Decorate():
                 # for this label so it should be placed at the most extant node
                 # in order to be conservative
                 closest_index = len(fmeasure_for_taxa[taxon]) - 1
-                closest_node = fmeasure_for_taxa[taxon][closest_index][0]
+                closest_node = fmeasure_for_taxa[taxon][closest_index].node
                     
             # add label to node
             support, cur_taxon, aux_info = parse_label(closest_node.label)

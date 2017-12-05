@@ -899,13 +899,14 @@ class Outliers(AbstractPlot):
         elif plot_taxa_file:
             taxa_to_plot = read_taxa_file(plot_taxa_file)
         else:
-            taxa_to_plot = filter_taxa_for_dist_inference(tree, 
-                                                            taxonomy, 
-                                                            trusted_taxa, 
-                                                            min_children, 
-                                                            min_support,
-                                                            None,
-                                                            0)
+            # plot every taxon defined in tree
+            taxa_to_plot = set()
+            for node in tree.preorder_node_iter():
+                support, taxon, _auxiliary_info = parse_label(node.label)
+                if taxon:
+                    taxon = taxon.split(';')[-1].strip() # get most specific taxon from compound names 
+                                                         # (e.g. p__Armatimonadetes; c__Chthonomonadetes)
+                    taxa_to_plot.add(taxon)
             
         # highlight taxa
         highlight_taxa = set()
