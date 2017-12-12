@@ -61,6 +61,10 @@ class OptionsParser():
 
         if not os.path.exists(options.output_dir):
             os.makedirs(options.output_dir)
+            
+        if options.highlight_polyphyly and not options.fmeasure_table:
+            self.logger.error("The '--highlight_polyphyly' flag must be used with the '--fmeasure_table' flag.")
+            return
 
         o = Outliers(options.dpi)
         o.run(options.input_tree,
