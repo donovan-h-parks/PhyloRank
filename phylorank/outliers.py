@@ -71,8 +71,6 @@ class Outliers(AbstractPlot):
         AbstractPlot.__init__(self, options)
         
         self.dpi = dpi
-
-        check_dependencies(['genometreetk'])
         
     def root_with_outgroup(self, input_tree, taxonomy, outgroup_taxa):
         """Reroot the tree using the given outgroup.
@@ -115,9 +113,9 @@ class Outliers(AbstractPlot):
             sys.exit(0)
             
         # There is a complication here. We wish to find the MRCA of the outgroup
-        # taxa. Finding the MRCA requires a rooted tree and we have no gaurantee
+        # taxa. Finding the MRCA requires a rooted tree and we have no guarantee
         # that the tree isn't currently rooted within the outgroup clade. There is
-        # also no way to identify a node that is gauranteed to be outside the outgroup
+        # also no way to identify a node that is guaranteed to be outside the outgroup
         # clade. As such, the tree is randomly rooted on a leaf node not in the outgroup.
         # This random rerooting is performed until the MRCA does not spans all taxa in 
         # the tree.
