@@ -1,3 +1,6 @@
+0.0.35
+- added 'rogue in' and 'rogue out' columns to phylorank decorate output table
+- implemented rogue taxa index command
 0.0.34
 - fixed bug with 'outlier' command where only taxa meeting criteria for RED median inference were being plotted
 - added No. Genomes from Taxon and No. Genome In Lineage columns to table produced by decorate command

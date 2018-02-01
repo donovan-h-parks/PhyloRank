@@ -39,7 +39,7 @@ class Decorate():
         self.logger = logging.getLogger()
         
         self.StatsTable = namedtuple('StatsTable', 
-                                        'node fmeasure precision recall taxa_in_lineage total_taxa num_leaves_with_taxa')
+                                        'node fmeasure precision recall taxa_in_lineage total_taxa num_leaves_with_taxa rogue_out rogue_in')
                                                     
     def _fmeasure(self, tree, taxonomy):
         """Find node with highest F-measure for each taxon.
@@ -136,7 +136,8 @@ class Decorate():
                         continue
                     
                 cur_taxon_fmeasure = -1
-                total_taxa = len(extent_taxa_with_label[rank_index][taxon])
+                cur_taxa = set(extent_taxa_with_label[rank_index][taxon])
+                total_taxa = len(cur_taxa)
                 
                 for node in taxon_parent_node.preorder_iter():
                     taxa_in_lineage = node.taxa_count[rank_index][taxon]
@@ -147,19 +148,29 @@ class Decorate():
                         recall = float(taxa_in_lineage) / total_taxa
                         fmeasure = (2*precision*recall) / (precision + recall)
                         
-                        stat_table = self.StatsTable(node=node, 
-                                        fmeasure=fmeasure, 
-                                        precision=precision, 
-                                        recall=recall, 
-                                        taxa_in_lineage=taxa_in_lineage, 
-                                        total_taxa=total_taxa, 
-                                        num_leaves_with_taxa=num_leaves_with_taxa)
+                        if fmeasure >= cur_taxon_fmeasure:
+                            node_taxa = set([l.taxon.label for l in node.leaf_iter()])
+                            rogue_out =  cur_taxa - node_taxa
+                            rogue_in = []
+                            for gid in node_taxa - cur_taxa:
+                                if taxonomy[gid][rank_index] != Taxonomy.rank_prefixes[rank_index]:
+                                    rogue_in.append(gid)
+                            
+                            stat_table = self.StatsTable(node=node, 
+                                            fmeasure=fmeasure, 
+                                            precision=precision, 
+                                            recall=recall, 
+                                            taxa_in_lineage=taxa_in_lineage, 
+                                            total_taxa=total_taxa, 
+                                            num_leaves_with_taxa=num_leaves_with_taxa,
+                                            rogue_out=rogue_out,
+                                            rogue_in=rogue_in)
 
-                        if fmeasure > cur_taxon_fmeasure:
-                            cur_taxon_fmeasure = fmeasure
-                            fmeasure_for_taxa[taxon] = [stat_table]
-                        elif fmeasure == cur_taxon_fmeasure:
-                            fmeasure_for_taxa[taxon].append(stat_table)
+                            if fmeasure > cur_taxon_fmeasure:
+                                cur_taxon_fmeasure = fmeasure
+                                fmeasure_for_taxa[taxon] = [stat_table]
+                            elif fmeasure == cur_taxon_fmeasure:
+                                fmeasure_for_taxa[taxon].append(stat_table)
 
         return fmeasure_for_taxa
         
@@ -230,7 +241,9 @@ class Decorate():
         extant_taxa = Taxonomy().extant_taxa(taxonomy)
     
         fout_table = open(out_table, 'w')
-        fout_table.write('Taxon\tNo. Expected in Tree\tF-measure\tPrecision\tRecall\tNo. Genomes from Taxon\tNo. Genome In Lineage\n')
+        fout_table.write('Taxon\tNo. Expected in Tree\tF-measure\tPrecision\tRecall')
+        fout_table.write('\tNo. Genomes from Taxon\tNo. Genome In Lineage')
+        fout_table.write('\tRogue out\tRogue in\n')
         for taxon in Taxonomy().sort_taxa(fmeasure_for_taxa.keys()):     
             if len(fmeasure_for_taxa[taxon]) != 1:
                 self.logger.error('Multiple positions specified for taxon label.')
@@ -239,14 +252,16 @@ class Decorate():
             num_genomes = len(extant_taxa[taxon])
             
             stat_table = fmeasure_for_taxa[taxon][0]
-            fout_table.write('%s\t%d\t%.4f\t%.4f\t%.4f\t%d\t%d\n' % (
+            fout_table.write('%s\t%d\t%.4f\t%.4f\t%.4f\t%d\t%d\t%s\t%s\n' % (
                                 taxon, 
                                 num_genomes, 
                                 stat_table.fmeasure, 
                                 stat_table.precision, 
                                 stat_table.recall,
                                 stat_table.taxa_in_lineage,
-                                stat_table.num_leaves_with_taxa))
+                                stat_table.num_leaves_with_taxa,
+                                ','.join(stat_table.rogue_out),
+                                ','.join(stat_table.rogue_in)))
                 
         fout_table.close()
         

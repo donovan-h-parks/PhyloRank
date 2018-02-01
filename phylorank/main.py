@@ -29,6 +29,7 @@ from phylorank.bl_dist import BranchLengthDistribution
 from phylorank.plot.robustness_plot import RobustnessPlot
 from phylorank.plot.distribution_plot import DistributionPlot
 from phylorank.decorate import Decorate
+from phylorank.rogue_test import RogueTest
 
 from biolib.common import (make_sure_path_exists,
                            check_dir_exists,
@@ -173,9 +174,9 @@ class OptionsParser():
         self.logger.info('Done.')
 
     def mark_tree(self, options):
-        """Mark tree command"""
+        """Mark tree command."""
 
-        check_file_exists(options.input_tree)
+        check_file_exists(options.input_tree_dir)
 
         mt = MarkTree()
         mt.run(options.input_tree,
@@ -189,6 +190,25 @@ class OptionsParser():
                     options.thresholds)
 
         self.logger.info('Marked tree written to: %s' % options.output_tree)
+        
+    def rogue_test(self, options):
+        """Rogue taxa command."""
+        
+        check_dir_exists(options.input_tree_dir)
+        check_file_exists(options.taxonomy_file)
+        make_sure_path_exists(options.output_dir)
+
+        if options.decorate:
+            check_dependencies(['genometreetk'])
+
+        rt = RogueTest()
+        rt.run(options.input_tree_dir,
+                options.taxonomy_file,
+                options.outgroup_taxon, 
+                options.decorate,
+                options.output_dir)
+            
+        self.logger.info('Finished rogue taxa test.')
         
     def decorate(self, options):
         """Place internal taxonomic labels on tree."""
@@ -427,6 +447,8 @@ class OptionsParser():
             self.compare_red(options)   
         elif(options.subparser_name == 'mark_tree'):
             self.mark_tree(options)
+        elif(options.subparser_name == 'rogue_test'):
+            self.rogue_test(options)
         elif(options.subparser_name == 'decorate'):
             self.decorate(options)
         elif(options.subparser_name == 'taxon_stats'):

@@ -725,7 +725,8 @@ class Outliers(AbstractPlot):
         
         # read taxonomy from tree
         if not taxonomy:
-            taxonomy = Taxonomy().read_from_tree(tree, warnings=False)
+            taxonomy = Taxonomy().read_from_tree(tree, 
+                                                    warnings=False)
     
         # get list of phyla level lineages
         all_phyla = get_phyla_lineages(tree)
@@ -869,7 +870,8 @@ class Outliers(AbstractPlot):
         # pull taxonomy from tree and file
         self.logger.info('Reading taxonomy.')
         taxonomy = Taxonomy().read(taxonomy_file)
-        tree_taxonomy = Taxonomy().read_from_tree(input_tree,warnings=False)
+        tree_taxonomy = Taxonomy().read_from_tree(input_tree,
+                                                    warnings=False)
             
         gtdb_parent_ranks = Taxonomy().parents(tree_taxonomy)
 

@@ -59,12 +59,13 @@ def print_help():
     rd_ranks    -> Calculate number of taxa for specified RED thresholds
     dist_plot   -> Plot distribution of taxa in each taxonomic rank
     mark_tree   -> Mark nodes with distribution information and predicted taxonomic ranks
+    rogue_test  -> Index indicating the incongruence of genomes over a set of tree
 
   Taxonomy decoration and inspection methods:
     decorate    -> Place internal taxonomic labels on tree
     taxon_stats -> Summary statistics of taxonomic groups
     rank_res    -> Calculate taxonomic resolution at each rank
-
+    
   Mean branch length to extant taxa methods:
     bl_dist     -> Calculate distribution of branch lengths at each taxonomic rank
     bl_optimal  -> Determine branch length for best congruency with existing taxonomy
@@ -185,6 +186,17 @@ if __name__ == '__main__':
     mark_tree_parser.add_argument('--no_relative_divergence', action="store_true", help="do not mark with relative divergence information")
     mark_tree_parser.add_argument('--no_prediction', action="store_true", help="do not mark with predicted rank information")
 
+    # rogue test
+    rogue_test_parser = subparsers.add_parser('rogue_test',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Index indicating the incongruence of genomes over a set of tree.')
+
+    rogue_test_parser.add_argument('input_tree_dir', help="directory containing trees to assess incongruence over")
+    rogue_test_parser.add_argument('taxonomy_file', help='file indicating taxonomy of extant taxa')
+    rogue_test_parser.add_argument('output_dir', help="desired output directory for generated files")
+    rogue_test_parser.add_argument('--outgroup_taxon', help='taxon to use as outgroup (e.g., d__Archaea); imples tree should be rooted')
+    rogue_test_parser.add_argument('--decorate', help='indicates trees should be decorated', action='store_true')
+
     # decorate ree
     decorate_parser = subparsers.add_parser('decorate',
                                         formatter_class=CustomHelpFormatter,
@@ -196,8 +208,7 @@ if __name__ == '__main__':
     decorate_parser.add_argument('-t', '--trusted_taxa_file', help="file indicating trusted taxonomic groups to use for inferring distribution (default: all taxa)", default=None)
     decorate_parser.add_argument('-m', '--min_children', help='minimum required child taxa to consider taxa when inferring distribution', type=int, default=2)
     decorate_parser.add_argument('-s', '--min_support', help="minimum support value to consider taxa when inferring distribution (default: 0)", type=float, default=0.0)
-    decorate_parser.add_argument('--silent', help="suppress output", action='store_true')
-    
+
     # pull taxonomy strings from tree
     pull_parser = subparsers.add_parser('pull',
                                             formatter_class=CustomHelpFormatter,
@@ -311,7 +322,10 @@ if __name__ == '__main__':
     else:
         args = parser.parse_args()
 
-    if hasattr(args, 'output_prefix'):
+    if hasattr(args, 'output_dir'):
+        make_sure_path_exists(args.output_dir)
+        logger_setup(os.path.join(args.output_dir, 'phylorank.log'), False)
+    elif hasattr(args, 'output_prefix'):
         output_dir, output_prefix = os.path.split(args.output_prefix)
         if output_dir:
             make_sure_path_exists(output_dir)

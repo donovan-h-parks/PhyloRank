@@ -19,5 +19,5 @@ setup(
     license='GPL3',
     description='Assigns taxonomic ranks based on evolutionary divergence.',
     install_requires=[
-        "biolib >= 0.0.45"],
+        "biolib >= 0.0.46"],
 )
