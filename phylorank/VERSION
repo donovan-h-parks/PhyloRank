@@ -1,3 +1,5 @@
+0.0.37
+- fixed bad call to _distribution_plot in outlier command when using a fixed root
 0.0.36
 - removed requirement for genometreetk when running outlier command
 0.0.35

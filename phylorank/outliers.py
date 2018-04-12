@@ -908,6 +908,37 @@ class Outliers(AbstractPlot):
                                                          # (e.g. p__Armatimonadetes; c__Chthonomonadetes)
                     taxa_to_plot.add(taxon)
             
+            if False:
+                # HACK FOR NCBI: only plot taxa with >= 2 taxa
+                taxa_to_plot = set()
+                for node in tree.preorder_node_iter():
+                    if not node.label or node.is_leaf():
+                        continue
+
+                    support, taxon, _auxiliary_info = parse_label(node.label)
+                    if not taxon:
+                        continue
+                    taxon = taxon.split(';')[-1].strip() # get most specific taxon from compound names 
+                                                         # (e.g. p__Armatimonadetes; c__Chthonomonadetes)
+                  
+                    # count number of subordinate children
+                    rank_prefix = taxon[0:3]
+                    if min_children > 0 and rank_prefix != 's__':
+                        child_rank_index = Taxonomy().rank_index[rank_prefix] + 1
+                        child_rank_prefix = Taxonomy.rank_prefixes[child_rank_index]
+                        subordinate_taxa = set()
+                        for leaf in node.leaf_iter():
+                            taxa = taxonomy.get(leaf.taxon.label, Taxonomy.rank_prefixes)
+                            if len(taxa) > child_rank_index:
+                                sub_taxon = taxa[child_rank_index]
+                                if sub_taxon != Taxonomy.rank_prefixes[child_rank_index] and sub_taxon.startswith(child_rank_prefix):
+                                    subordinate_taxa.add(sub_taxon)
+
+                        if len(subordinate_taxa) < min_children:
+                            continue
+                            
+                    taxa_to_plot.add(taxon)
+            
         # highlight taxa
         highlight_taxa = set()
         if highlight_taxa_file:
@@ -925,7 +956,14 @@ class Outliers(AbstractPlot):
             # create fixed rooting style tables and plots
             distribution_table = os.path.join(output_dir, '%s.rank_distribution.tsv' % input_tree_name)
             plot_file = os.path.join(output_dir, '%s.png' % input_tree_name)
-            self._distribution_plot(rel_dists, taxa_for_dist_inference, distribution_table, plot_file)
+            self._distribution_plot(rel_dists, 
+                                        taxa_for_dist_inference,
+                                        highlight_polyphyly,
+                                        highlight_taxa,
+                                        distribution_table,
+                                        fmeasure,
+                                        fmeasure_mono,
+                                        plot_file)
 
             median_outlier_table = os.path.join(output_dir, '%s.tsv' % input_tree_name)
             self._median_outlier_file(rel_dists, 
