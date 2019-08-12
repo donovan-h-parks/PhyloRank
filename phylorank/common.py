@@ -101,7 +101,7 @@ def filter_taxa_for_dist_inference(tree,
             
         taxon = taxon.split(';')[-1].strip() # get most specific taxon from compound names 
                                              # (e.g. p__Armatimonadetes; c__Chthonomonadetes)
-                                             
+
         if support and min_support > 0 and support < min_support:
             continue
 
@@ -112,7 +112,7 @@ def filter_taxa_for_dist_inference(tree,
             
         if fmeasure and fmeasure[taxon] < min_fmeasure:
             continue
-            
+
         # count number of subordinate children
         rank_prefix = taxon[0:3]
         if min_children > 0 and rank_prefix != 's__':
@@ -123,12 +123,13 @@ def filter_taxa_for_dist_inference(tree,
                 taxa = taxonomy.get(leaf.taxon.label, Taxonomy.rank_prefixes)
                 if len(taxa) > child_rank_index:
                     sub_taxon = taxa[child_rank_index]
+                    
                     if sub_taxon != Taxonomy.rank_prefixes[child_rank_index] and sub_taxon.startswith(child_rank_prefix):
                         subordinate_taxa.add(sub_taxon)
 
             if len(subordinate_taxa) < min_children:
                 continue
-                
+
         taxa_for_dist_inference.add(taxon)
 
     # restrict taxa used for inferring distribution to the trusted set

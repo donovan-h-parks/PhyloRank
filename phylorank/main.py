@@ -31,6 +31,10 @@ from phylorank.plot.distribution_plot import DistributionPlot
 from phylorank.decorate import Decorate
 from phylorank.rogue_test import RogueTest
 
+from phylorank.viral_taxonomy import (VIRAL_RANK_LABELS,
+                                        VIRAL_RANK_PREFIXES,
+                                        sort_viral_taxa)
+
 from biolib.common import (make_sure_path_exists,
                            check_dir_exists,
                            check_file_exists)
@@ -67,10 +71,10 @@ class OptionsParser():
             self.logger.error("The '--highlight_polyphyly' flag must be used with the '--fmeasure_table' flag.")
             return
 
-        o = Outliers(options.dpi)
+        o = Outliers(options.dpi, options.output_dir)
         o.run(options.input_tree,
                 options.taxonomy_file,
-                options.output_dir,
+                options.viral,
                 options.plot_taxa_file,
                 options.plot_dist_taxa_only,
                 options.plot_domain,
@@ -118,11 +122,16 @@ class OptionsParser():
 
         fout = open(options.output_table, 'w')
         fout.write('Taxon\tLineage\t%s\t%s\tDifference\tAbs. Difference\tChanged rank\n' % (red1_label, red2_label))
-        for taxon in Taxonomy().sort_taxa(set(red1.keys()).union(red2.keys())):
+        if options.viral:
+            sorted_taxa = sort_viral_taxa(set(red1.keys()).union(red2.keys()))
+        else:
+            sorted_taxa = Taxonomy().sort_taxa(set(red1.keys()).union(red2.keys()))
+        
+        for taxon in sorted_taxa:
             r1 = red1.get(taxon, 'NA')
             r2 = red2.get(taxon, 'NA')
             if r1 == 'NA':
-                fout.write('%s\t%s\t%s\t%.3f\t%s\t%s' % (taxon, 'NA', 'NA', r2, 'NA', 'NA'))                    
+                fout.write('%s\t%s\t%s\t%.3f\t%s\t%s' % (taxon, 'NA', 'NA', r2, 'NA', 'NA'))
             elif r2 == 'NA':
                 fout.write('%s\t%s\t%.3f\t%s\t%s\t%s\t%s\n' % (taxon, lineage[taxon], r1, 'NA', 'NA', 'NA', 'NA'))
             else:
@@ -132,7 +141,11 @@ class OptionsParser():
                 rank_prefix = taxon[0:3]
                 if rank_prefix == 'd__':
                     continue
-                rank_label = Taxonomy.rank_labels[Taxonomy.rank_prefixes.index(rank_prefix)]
+                    
+                if options.viral:
+                    rank_label = VIRAL_RANK_LABELS[VIRAL_RANK_PREFIXES(rank_prefix)]
+                else:
+                    rank_label = Taxonomy.rank_labels[Taxonomy.rank_prefixes.index(rank_prefix)]
                 rank_median = median_reds[rank_label]
             
                 closest_rank = rank_label
@@ -219,6 +232,7 @@ class OptionsParser():
         decorate = Decorate()
         decorate.run(options.input_tree,
                         options.taxonomy_file,
+                        options.viral,
                         options.trusted_taxa_file,
                         options.min_children,
                         options.min_support,

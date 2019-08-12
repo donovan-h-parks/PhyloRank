@@ -23,10 +23,15 @@ from collections import defaultdict, namedtuple
 
 from phylorank.rel_dist import RelativeDistance
 from phylorank.common import (read_taxa_file,
-                              filter_taxa_for_dist_inference,
-                              is_integer,
-                              get_phyla_lineages)
+                                filter_taxa_for_dist_inference,
+                                is_integer,
+                                get_phyla_lineages)
 from phylorank.newick import parse_label
+from phylorank.viral_taxonomy import (VIRAL_RANK_LABELS,
+                                        translate_viral_taxonomy,
+                                        translate_viral_tree,
+                                        rev_translate_output_file,
+                                        read_viral_taxonomy_from_tree)
 
 from biolib.taxonomy import Taxonomy
 from biolib.plots.abstract_plot import AbstractPlot
@@ -61,16 +66,18 @@ class Outliers(AbstractPlot):
     indicating the median distance over all rootings.
     """
 
-    def __init__(self, dpi=96):
+    def __init__(self, dpi=96, output_dir=None):
         """Initialize."""
+        
         self.logger = logging.getLogger()
 
         Options = namedtuple('Options', 'width height tick_font_size label_font_size dpi')
-        options = Options(6, 6, 12, 12, 96)
+        options = Options(5, 4, 12, 12, 96)
 
         AbstractPlot.__init__(self, options)
         
         self.dpi = dpi
+        self.output_dir = output_dir
         
     def root_with_outgroup(self, input_tree, taxonomy, outgroup_taxa):
         """Reroot the tree using the given outgroup.
@@ -160,7 +167,8 @@ class Outliers(AbstractPlot):
                             distribution_table,
                             fmeasure,
                             fmeasure_mono,
-                            plot_file):
+                            plot_file,
+                            viral):
         """Create plot showing the distribution of taxa at each taxonomic rank.
 
         Parameters
@@ -224,7 +232,10 @@ class Outliers(AbstractPlot):
         labels = []
         rank_labels = []
         for i, rank in enumerate(sorted(rel_dists.keys())):
-            rank_label = Taxonomy.rank_labels[rank]
+            if viral:
+                rank_label = VIRAL_RANK_LABELS[rank]
+            else:
+                rank_label = Taxonomy.rank_labels[rank]
             rank_labels.append(rank_label.capitalize()  + ' (%d)' % len(rel_dists[rank]))
             
             mono = []
@@ -329,8 +340,10 @@ class Outliers(AbstractPlot):
     def _median_outlier_file(self, 
                                 rel_dists,
                                 taxa_for_dist_inference,
-                                gtdb_parent_ranks, 
-                                output_file):
+                                gtdb_parent_ranks,
+                                viral,
+                                output_file,
+                                median_rank_file):
         """Identify outliers relative to the median of rank distributions.
 
         Parameters
@@ -353,6 +366,17 @@ class Outliers(AbstractPlot):
                 continue
                 
             median_rel_dist[rank] = np_median(v)
+            
+        fout_rank = open(median_rank_file, 'w')
+        median_str = []
+        for rank in sorted(median_rel_dist.keys()):
+            if viral:
+                rank_label = VIRAL_RANK_LABELS[rank]
+            else:
+                rank_label = Taxonomy.rank_labels[rank]
+            median_str.append('"' + rank_label + '":' + str(median_rel_dist[rank]))
+        fout_rank.write('{' + ','.join(median_str) + '}\n')
+        fout_rank.close()
 
         fout = open(output_file, 'w')
         fout.write('Taxa\tGTDB taxonomy\tMedian distance\tMean difference\tClosest rank\tClassification\n')
@@ -811,23 +835,24 @@ class Outliers(AbstractPlot):
                 
         return fmeasure
         
-    def run(self, input_tree, 
-                    taxonomy_file, 
-                    output_dir, 
-                    plot_taxa_file,
-                    plot_dist_taxa_only,
-                    plot_domain,
-                    highlight_polyphyly,
-                    highlight_taxa_file,
-                    trusted_taxa_file,
-                    fixed_root,
-                    min_children, 
-                    min_support,
-                    mblet,
-                    fmeasure_table,
-                    min_fmeasure,
-                    fmeasure_mono,
-                    verbose_table):
+    def run(self, 
+                input_tree, 
+                taxonomy_file, 
+                viral,
+                plot_taxa_file,
+                plot_dist_taxa_only,
+                plot_domain,
+                highlight_polyphyly,
+                highlight_taxa_file,
+                trusted_taxa_file,
+                fixed_root,
+                min_children, 
+                min_support,
+                mblet,
+                fmeasure_table,
+                min_fmeasure,
+                fmeasure_mono,
+                verbose_table):
         """Determine distribution of taxa at each taxonomic rank.
 
         Parameters
@@ -836,8 +861,6 @@ class Outliers(AbstractPlot):
           Name of input tree.
         taxonomy_file : str
           File with taxonomy strings for each taxa.
-        output_dir : str
-          Desired output directory.
         plot_taxa_file : str
           File specifying taxa to plot. Set to None to consider all taxa.
         plot_dist_taxa_only : boolean    
@@ -868,8 +891,16 @@ class Outliers(AbstractPlot):
         # pull taxonomy from tree and file
         self.logger.info('Reading taxonomy.')
         taxonomy = Taxonomy().read(taxonomy_file)
-        tree_taxonomy = Taxonomy().read_from_tree(input_tree,
-                                                    warnings=False)
+        
+        if viral:
+            self.logger.info('Translating viral prefixes.')
+            taxonomy = translate_viral_taxonomy(taxonomy)
+            tree_taxonomy = read_viral_taxonomy_from_tree(input_tree)
+            tree_taxonomy = translate_viral_taxonomy(tree_taxonomy)
+            translate_viral_tree(tree)
+        else:
+            tree_taxonomy = Taxonomy().read_from_tree(input_tree,
+                                                        warnings=False)
             
         gtdb_parent_ranks = Taxonomy().parents(tree_taxonomy)
 
@@ -891,6 +922,8 @@ class Outliers(AbstractPlot):
                                                                     min_support,
                                                                     fmeasure,
                                                                     min_fmeasure)
+        self.logger.info('Identified %d of %d taxa for use in inferring RED distribution.' % (
+                            len(taxa_for_dist_inference), len(taxonomy)))
 
         # limit plotted taxa
         taxa_to_plot = None
@@ -946,6 +979,13 @@ class Outliers(AbstractPlot):
                 highlight_taxa.add(line.strip().split('\t')[0])
                 
         # check if a single fixed root should be used
+        dist_plot_file = os.path.join(self.output_dir, '{}.png'.format(input_tree_name))
+        median_outlier_table = os.path.join(self.output_dir, '{}.tsv'.format(input_tree_name))
+        distribution_table = os.path.join(self.output_dir, '{}.rank_distribution.tsv'.format(
+                                                input_tree_name))
+        median_rank_file = os.path.join(self.output_dir, '{}.dict'.format(input_tree_name))
+        phyla_file = os.path.join(self.output_dir, '{}.phyla.tsv'.format(input_tree_name))
+        
         if fixed_root or mblet:
             self.logger.info('Using single fixed rooting for inferring distributions.')
             if not mblet:
@@ -954,8 +994,6 @@ class Outliers(AbstractPlot):
                 rel_dists = self.mblet(tree, taxa_for_dist_inference)
                 
             # create fixed rooting style tables and plots
-            distribution_table = os.path.join(output_dir, '%s.rank_distribution.tsv' % input_tree_name)
-            plot_file = os.path.join(output_dir, '%s.png' % input_tree_name)
             self._distribution_plot(rel_dists, 
                                         taxa_for_dist_inference,
                                         highlight_polyphyly,
@@ -963,13 +1001,15 @@ class Outliers(AbstractPlot):
                                         distribution_table,
                                         fmeasure,
                                         fmeasure_mono,
-                                        plot_file)
+                                        dist_plot_file,
+                                        viral)
 
-            median_outlier_table = os.path.join(output_dir, '%s.tsv' % input_tree_name)
             self._median_outlier_file(rel_dists, 
                                         taxa_for_dist_inference, 
-                                        gtdb_parent_ranks, 
-                                        median_outlier_table)
+                                        gtdb_parent_ranks,
+                                        viral,
+                                        median_outlier_table,
+                                        median_rank_file)
         else:
             # calculate relative distance to taxa
             rd = RelativeDistance()
@@ -1006,7 +1046,7 @@ class Outliers(AbstractPlot):
                 print ''
                 print 'Phyla for RED Inference:'
                 print ','.join(phylum_rel_dists)
-                phyla_file = os.path.join(output_dir, '%s.phyla.tsv' % input_tree_name)
+                
                 fout = open(phyla_file, 'w')
                 for p in phylum_rel_dists:
                     fout.write(p + '\n')
@@ -1022,7 +1062,7 @@ class Outliers(AbstractPlot):
                 n.edge_length = rd_to_parent
 
             for phylum, rel_dists in phylum_rel_dists.iteritems():
-                phylum_dir = os.path.join(output_dir, phylum)
+                phylum_dir = os.path.join(self.output_dir, phylum)
                 if not os.path.exists(phylum_dir):
                     os.makedirs(phylum_dir)
                     
@@ -1035,6 +1075,7 @@ class Outliers(AbstractPlot):
                 # create distribution plot
                 distribution_table = os.path.join(phylum_dir, '%s.rank_distribution.tsv' % phylum)
                 plot_file = os.path.join(phylum_dir, '%s.rank_distribution.png' % phylum)
+                median_rank_file = os.path.join(phylum_dir, '%s.median_red.dict' % phylum)
                 self._distribution_plot(rel_dists, 
                                         taxa_for_dist_inference,
                                         highlight_polyphyly,
@@ -1042,25 +1083,30 @@ class Outliers(AbstractPlot):
                                         distribution_table,
                                         fmeasure,
                                         fmeasure_mono,
-                                        plot_file)
+                                        plot_file,
+                                        viral)
 
                 median_outlier_table = os.path.join(phylum_dir, '%s.median_outlier.tsv' % phylum)
                 self._median_outlier_file(rel_dists, 
                                             taxa_for_dist_inference, 
                                             gtdb_parent_ranks,
-                                            median_outlier_table)
+                                            viral,
+                                            median_outlier_table,
+                                            median_rank_file)
+                                            
+                if viral:
+                    rev_translate_output_file(distribution_table)
+                    rev_translate_output_file(plot_file)
+                    rev_translate_output_file(median_outlier_table)
    
-            plot_file = os.path.join(output_dir, '%s.png' % input_tree_name)
             self._distribution_summary_plot(phylum_rel_dists, 
                                             taxa_for_dist_inference,
                                             highlight_polyphyly,
                                             highlight_taxa,
                                             fmeasure,
                                             fmeasure_mono,
-                                            plot_file)
+                                            dist_plot_file)
 
-            median_outlier_table = os.path.join(output_dir, '%s.tsv' % input_tree_name)
-            median_rank_file = os.path.join(output_dir, '%s.dict' % input_tree_name)
             self._median_summary_outlier_file(phylum_rel_dists, 
                                                 taxa_for_dist_inference, 
                                                 gtdb_parent_ranks, 
@@ -1068,11 +1114,29 @@ class Outliers(AbstractPlot):
                                                 median_rank_file, 
                                                 verbose_table)
 
-        output_rd_file = os.path.join(output_dir, '%s.node_rd.tsv' % input_tree_name)
+        output_rd_file = os.path.join(self.output_dir, '{}.node_rd.tsv'.format(input_tree_name))
         self._write_rd(tree, output_rd_file)
                                                 
-        output_tree = os.path.join(output_dir, '%s.scaled.tree' % input_tree_name)
+        output_tree = os.path.join(self.output_dir, '{}.scaled.tree'.format(input_tree_name))
         tree.write_to_path(output_tree, 
                             schema='newick', 
                             suppress_rooting=True, 
-                            unquoted_underscores=True)                
+                            unquoted_underscores=True)
+                            
+        if viral:
+            self.logger.info('Translating output files to viral prefixes.')
+            rev_translate_output_file(output_rd_file)
+            rev_translate_output_file(output_tree)
+            rev_translate_output_file(median_outlier_table)
+            
+            rev_translate_output_file(dist_plot_file)
+            dist_plot_file_html = dist_plot_file.replace('.png', '.html')
+            if os.path.exists(dist_plot_file_html):
+                rev_translate_output_file(dist_plot_file_html)
+            
+            if os.path.exists(distribution_table):
+                rev_translate_output_file(distribution_table)
+            if os.path.exists(median_rank_file):
+                rev_translate_output_file(median_rank_file)
+            if os.path.exists(phyla_file):
+                rev_translate_output_file(phyla_file)

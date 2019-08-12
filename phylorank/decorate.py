@@ -28,6 +28,8 @@ from biolib.newick import parse_label, create_label
 from phylorank.common import (read_taxa_file,
                               filter_taxa_for_dist_inference)
 from phylorank.outliers import Outliers
+from phylorank.viral_taxonomy import (translate_viral_taxonomy,
+                                        rev_translate_output_file)
 
 
 class Decorate():
@@ -94,6 +96,8 @@ class Decorate():
         # find node with best F-measure for each taxon
         fmeasure_for_taxa = {}
         for rank_index in xrange(0, len(Taxonomy.rank_labels)):
+            #if rank_index == 6: #*** skip species
+            #    continue 
             self.logger.info('Processing %d taxa at %s rank.' % (len(taxa_at_rank[rank_index]),
                                                                     Taxonomy.rank_labels[rank_index].capitalize()))
             
@@ -487,6 +491,7 @@ class Decorate():
     def run(self, 
                 input_tree, 
                 taxonomy_file, 
+                viral,
                 trusted_taxa_file, 
                 min_children, 
                 min_support,
@@ -526,6 +531,10 @@ class Decorate():
         # read taxonomy and trim to taxa in tree
         self.logger.info('Reading taxonomy.')
         full_taxonomy = Taxonomy().read(taxonomy_file)
+        
+        if viral:
+            self.logger.info('Translating viral prefixes.')
+            full_taxonomy = translate_viral_taxonomy(full_taxonomy)
  
         taxonomy = {}
         for leaf in tree.leaf_node_iter():
@@ -588,15 +597,8 @@ class Decorate():
                             suppress_rooting=True, 
                             unquoted_underscores=True)
                             
-        # validate taxonomy
-        if False:
-            self.logger.info('Validating taxonomy for extant taxa.')
-            tree_taxonomy = Taxonomy().read(out_taxonomy)
-            Taxonomy().validate(tree_taxonomy,
-                              check_prefixes=True,
-                              check_ranks=True,
-                              check_hierarchy=True,
-                              check_species=True,
-                              check_group_names=True,
-                              check_duplicate_names=True,
-                              report_errors=True)
+        if viral:
+            self.logger.info('Translating output files to viral prefixes.')
+            rev_translate_output_file(out_table)
+            rev_translate_output_file(out_taxonomy)
+            rev_translate_output_file(output_tree)

@@ -1,3 +1,7 @@
+0.0.39
+- added 'viral' flag to 'outliers', 'decorate', and 'compare_red' methods
+0.0.38
+- added 'website_labels' option to 'outliers' method
 0.0.37
 - fixed bad call to _distribution_plot in outlier command when using a fixed root
 0.0.36
