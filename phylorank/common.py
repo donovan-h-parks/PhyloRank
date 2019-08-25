@@ -57,7 +57,8 @@ def filter_taxa_for_dist_inference(tree,
                                     min_children, 
                                     min_support,
                                     fmeasure = None,
-                                    min_fmeasure = None):
+                                    min_fmeasure = None,
+                                    report_invalid_sp = True):
     """Determine taxa to use for inferring distribution of relative divergences.
 
     Parameters
@@ -82,7 +83,8 @@ def filter_taxa_for_dist_inference(tree,
             valid, error_msg = True, None
             if species_name != 's__':
                 valid, error_msg = Taxonomy().validate_species_name(species_name, require_full=True, require_prefix=True)
-            if not valid:
+                
+            if not valid and report_invalid_sp:
                 print '[Warning] Species name %s for %s is invalid: %s' % (species_name, taxon_id, error_msg)
                 continue
                 

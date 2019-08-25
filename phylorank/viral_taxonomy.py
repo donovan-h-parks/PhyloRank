@@ -17,6 +17,7 @@
 
 import os
 import sys
+import logging
 
 from phylorank.newick import parse_label, create_label
 
@@ -52,7 +53,7 @@ def translate_viral_taxonomy(taxonomy):
         for taxon in taxa:
             prefix = taxon[0:3]
             if prefix not in VIRAL_PREFIX_TRANSLATION:
-                print('Unrecognized viral prefix: {}'.format(prefix))
+                print('Unrecognized viral prefix for {}: {}'.format(gid, prefix))
                 sys.exit(-1)
                 
             translated_taxa.append(taxon.replace(prefix, VIRAL_PREFIX_TRANSLATION[prefix]))
@@ -83,7 +84,7 @@ def translate_viral_tree(tree):
         for taxon in [t.strip() for t in taxa.split(';')]:
             prefix = taxon[0:3]
             if prefix not in VIRAL_PREFIX_TRANSLATION:
-                print('Unrecognized viral prefix: {}'.format(prefix))
+                print('Unrecognized viral prefix for {}: {}'.format(taxon, prefix))
                 sys.exit(-1)
                 
             translated_taxa.append(taxon.replace(prefix, VIRAL_PREFIX_TRANSLATION[prefix]))
@@ -150,19 +151,22 @@ def read_viral_taxonomy_from_tree(tree):
             node = node.parent_node
 
         if len(taxa) > 7:
-            self.logger.warning('Invalid taxonomy string read from tree for taxon %s: %s' % (leaf.taxon.label, taxa))
+            logger = logging.getLogger()
+            logger.error('Invalid taxonomy string read from tree for taxon %s: %s' % (leaf.taxon.label, ';'.join(taxa)))
+            sys.exit(-1)
             
         for taxon in taxa:
             prefix = taxon[0:3]
             if prefix not in VIRAL_PREFIX_TRANSLATION:
-                print('Unrecognized viral prefix: {}'.format(prefix))
+                print('Unrecognized viral prefix for {}: {}'.format(taxon, prefix))
                 sys.exit(-1)
                 
         # fill missing ranks
         try:
             last_rank = VIRAL_RANK_PREFIXES.index(taxa[-1][0:3])
         except:
-            print('Taxon {} is missing rank prefix: {}'.format(leaf.taxon.label, ';'.join(taxa)))
+            logger = logging.getLogger()
+            logger.error('Taxon {} is missing rank prefix: {}'.format(leaf.taxon.label, ';'.join(taxa)))
             sys.exit(-1)
         
         for i in xrange(last_rank+1, len(VIRAL_RANK_PREFIXES)):

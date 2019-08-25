@@ -904,6 +904,7 @@ class Outliers(AbstractPlot):
             
         gtdb_parent_ranks = Taxonomy().parents(tree_taxonomy)
 
+
         # read trusted taxa
         trusted_taxa = None
         if trusted_taxa_file:
@@ -921,7 +922,8 @@ class Outliers(AbstractPlot):
                                                                     min_children, 
                                                                     min_support,
                                                                     fmeasure,
-                                                                    min_fmeasure)
+                                                                    min_fmeasure,
+                                                                    report_invalid_sp = not viral)
         self.logger.info('Identified %d of %d taxa for use in inferring RED distribution.' % (
                             len(taxa_for_dist_inference), len(taxonomy)))
 
