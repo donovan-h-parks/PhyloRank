@@ -38,6 +38,14 @@ The taxonomy file is a simple tab-separated values file with two columns indicat
 >GCF_001687105.1    d__Bacteria;p__Proteobacteria;c__Alphaproteobacteria;o__Rhodobacterales;f__Rhodobacteraceae;g__Yangia;s__
 ```
 
+## Example data
+
+Example data is provided in the `example` directory. This tree can be decorated and the RED of each taxon establish as follows:
+```
+>phylorank decorate --skip_rd_refine ar122_r89.tree ar122_taxonomy_r89.tsv ar122_r89.decorated.tree
+>phylorank outliers ar122_r89.decorated.tree ar122_taxonomy_r89.tsv output_dir
+```
+
 ## Cite
 
 If you find this package useful, please cite this git repository (https://github.com/dparks1134/PhyloRank)
