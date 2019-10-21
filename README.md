@@ -3,6 +3,7 @@
 **If you are looking to classify genomes according to the methodology used by the [GTDB](http://gtdb.ecogenomic.org/), we recommend using our companion tool [GTDB-Tk](https://github.com/Ecogenomics/GtdbTk) instead of PhyloRank. PhyloRank is primarily intended for taxonomic curation on trees inferred from genomes spanning the bacterial or archaeal domain.**
 
 [![version status](https://img.shields.io/pypi/v/phylorank.svg)](https://pypi.python.org/pypi/phylorank)
+[![Downloads](https://pepy.tech/badge/phylorank/month)](https://pepy.tech/project/phylorank)
 
 PhyloRank provide functionality for calculating the relative evolutionary divergence (RED) of taxa in a tree and for finding the best placement of taxonomic labels in a tree . Other functionality is in development and is currently unsupported.
 
