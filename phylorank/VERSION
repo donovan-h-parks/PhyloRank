@@ -1,3 +1,7 @@
+0.0.42
+- fixed bug resulting in RED dictionary file not being created
+0.0.41
+- added 'scale_tree' method to scaled rooted trees based on RED
 0.0.40
 - improved error reporting for invalid viral taxonomy files
 0.0.39

@@ -92,6 +92,31 @@ class OptionsParser():
 
         self.logger.info('Done.')
         
+    def scale_tree(self, options):
+        """Scale a rooted tree based on RED."""
+        
+        check_file_exists(options.input_tree)
+        
+        self.logger.info('Reading tree.')
+        tree = dendropy.Tree.get_from_path(options.input_tree, 
+                                            schema='newick', 
+                                            rooting='force-rooted', 
+                                            preserve_underscores=True)
+                                            
+        self.logger.info('Scaling tree based on RED.')
+        rd = RelativeDistance()
+        rd.decorate_rel_dist(tree)
+        for n in tree.preorder_node_iter(lambda n: n != tree.seed_node):
+            rd_to_parent = n.rel_dist - n.parent_node.rel_dist
+            n.edge_length = rd_to_parent
+            
+        tree.write_to_path(options.output_tree, 
+                            schema='newick', 
+                            suppress_rooting=True, 
+                            unquoted_underscores=True)
+                            
+        self.logger.info('Done.')
+        
     def compare_red(self, options):
         """Compare RED values of taxa calculated over different trees."""
 
@@ -457,6 +482,8 @@ class OptionsParser():
 
         if(options.subparser_name == 'outliers'):
             self.outliers(options)
+        elif(options.subparser_name == 'scale_tree'):
+            self.scale_tree(options)
         elif(options.subparser_name == 'compare_red'):
             self.compare_red(options)   
         elif(options.subparser_name == 'mark_tree'):

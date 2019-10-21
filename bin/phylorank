@@ -55,6 +55,7 @@ def print_help():
 
   Curation methods:
     outliers    -> Create RED table, scaled tree, and plot useful for identifying taxonomic outliers
+    scale_tree  -> Scale a rooted tree based on RED
     compare_red -> Compare RED values of taxa calculated over different trees
     rd_ranks    -> Calculate number of taxa for specified RED thresholds
     dist_plot   -> Plot distribution of taxa in each taxonomic rank
@@ -146,7 +147,15 @@ if __name__ == '__main__':
     outliers_parser.add_argument('--highlight_taxa_file', help='file indicating taxa to highlight')
     outliers_parser.add_argument('--dpi', help='DPI of plots', type=int, default=96)
     outliers_parser.add_argument('--verbose_table', action="store_true", help='add additional columns to output table')
-   
+    
+    # create table and plot useful for identifying taxonomic outliers.
+    scale_tree_parser = subparsers.add_parser('scale_tree',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Scale a rooted tree based on RED')
+
+    scale_tree_parser.add_argument('input_tree', help="rooted tree to scale")
+    scale_tree_parser.add_argument('output_tree', help="tree scaled by RED")
+       
     # Compare RED values of taxa calculated over different trees
     compare_red_parser = subparsers.add_parser('compare_red',
                                             formatter_class=CustomHelpFormatter,

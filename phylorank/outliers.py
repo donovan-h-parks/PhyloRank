@@ -982,10 +982,10 @@ class Outliers(AbstractPlot):
                 
         # check if a single fixed root should be used
         dist_plot_file = os.path.join(self.output_dir, '{}.png'.format(input_tree_name))
-        median_outlier_table = os.path.join(self.output_dir, '{}.tsv'.format(input_tree_name))
+        summary_median_outlier_table = os.path.join(self.output_dir, '{}.tsv'.format(input_tree_name))
         distribution_table = os.path.join(self.output_dir, '{}.rank_distribution.tsv'.format(
                                                 input_tree_name))
-        median_rank_file = os.path.join(self.output_dir, '{}.dict'.format(input_tree_name))
+        summary_median_rank_file = os.path.join(self.output_dir, '{}.dict'.format(input_tree_name))
         phyla_file = os.path.join(self.output_dir, '{}.phyla.tsv'.format(input_tree_name))
         
         if fixed_root or mblet:
@@ -1010,8 +1010,8 @@ class Outliers(AbstractPlot):
                                         taxa_for_dist_inference, 
                                         gtdb_parent_ranks,
                                         viral,
-                                        median_outlier_table,
-                                        median_rank_file)
+                                        summary_median_outlier_table,
+                                        summary_median_rank_file)
         else:
             # calculate relative distance to taxa
             rd = RelativeDistance()
@@ -1112,8 +1112,8 @@ class Outliers(AbstractPlot):
             self._median_summary_outlier_file(phylum_rel_dists, 
                                                 taxa_for_dist_inference, 
                                                 gtdb_parent_ranks, 
-                                                median_outlier_table, 
-                                                median_rank_file, 
+                                                summary_median_outlier_table, 
+                                                summary_median_rank_file, 
                                                 verbose_table)
 
         output_rd_file = os.path.join(self.output_dir, '{}.node_rd.tsv'.format(input_tree_name))
@@ -1129,7 +1129,7 @@ class Outliers(AbstractPlot):
             self.logger.info('Translating output files to viral prefixes.')
             rev_translate_output_file(output_rd_file)
             rev_translate_output_file(output_tree)
-            rev_translate_output_file(median_outlier_table)
+            rev_translate_output_file(summary_median_outlier_table)
             
             rev_translate_output_file(dist_plot_file)
             dist_plot_file_html = dist_plot_file.replace('.png', '.html')
@@ -1138,7 +1138,7 @@ class Outliers(AbstractPlot):
             
             if os.path.exists(distribution_table):
                 rev_translate_output_file(distribution_table)
-            if os.path.exists(median_rank_file):
-                rev_translate_output_file(median_rank_file)
+            if os.path.exists(summary_median_rank_file):
+                rev_translate_output_file(summary_median_rank_file)
             if os.path.exists(phyla_file):
                 rev_translate_output_file(phyla_file)
