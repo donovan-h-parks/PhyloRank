@@ -40,7 +40,7 @@ The taxonomy file is a simple tab-separated values file with two columns indicat
 
 ## Example data
 
-Example data is provided in the `example` directory. This tree can be decorated and the RED of each taxon establish as follows:
+Example data is provided in the `example_data` directory. This tree can be decorated and the RED of each taxon establish as follows:
 ```
 >phylorank decorate --skip_rd_refine ar122_r89.tree ar122_taxonomy_r89.tsv ar122_r89.decorated.tree
 >phylorank outliers ar122_r89.decorated.tree ar122_taxonomy_r89.tsv output_dir
