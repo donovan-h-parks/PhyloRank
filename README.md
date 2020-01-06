@@ -5,7 +5,7 @@
 [![version status](https://img.shields.io/pypi/v/phylorank.svg)](https://pypi.python.org/pypi/phylorank)
 [![Downloads](https://pepy.tech/badge/phylorank/month)](https://pepy.tech/project/phylorank)
 
-PhyloRank provide functionality for calculating the relative evolutionary divergence (RED) of taxa in a tree and for finding the best placement of taxonomic labels in a tree . Other functionality is in development and is currently unsupported.
+PhyloRank provides functionality for calculating the relative evolutionary divergence (RED) of taxa in a tree and for finding the best placement of taxonomic labels in a tree. Other functionality is in development and is currently unsupported.
 
 ## Install
 
