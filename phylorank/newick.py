@@ -18,7 +18,6 @@
 
 from biolib.common import is_float
 
-
 '''Helper functions for parsing Newick information.'''
 
 
@@ -43,7 +42,7 @@ def parse_label(label):
     support = None
     taxon = None
     auxiliary_info = None
-    
+
     if label:
         label = label.strip()
         if '|' in label:
@@ -59,8 +58,8 @@ def parse_label(label):
                 taxon = label
 
     return support, taxon, auxiliary_info
-    
-    
+
+
 def create_label(support, taxon, auxiliary_info):
     """Create label for Newick tree.
     
@@ -78,7 +77,7 @@ def create_label(support, taxon, auxiliary_info):
     str
       Valid newick label.
     """
-    
+
     label = ''
     if support is not None and taxon:
         label = str(support) + ':' + taxon
@@ -86,7 +85,7 @@ def create_label(support, taxon, auxiliary_info):
         label = str(support)
     elif taxon:
         label = taxon
-        
+
     if auxiliary_info:
         label += '|' + auxiliary_info
 

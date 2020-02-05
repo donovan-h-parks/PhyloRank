@@ -15,14 +15,13 @@
 #                                                                             #
 ###############################################################################
 
-import os
 import logging
 from collections import defaultdict
 
-from phylorank.rel_dist import RelativeDistance
-from phylorank.newick import parse_label
-
 import dendropy
+
+from phylorank.newick import parse_label
+from phylorank.rel_dist import RelativeDistance
 
 '''
 To do:
@@ -43,14 +42,14 @@ class MarkTree():
         self.highly_basal_designator = 'X__'
 
     def run(self, input_tree,
-                    output_tree,
-                    min_support,
-                    only_named_clades,
-                    min_length,
-                    show_percentiles,
-                    show_relative_divergence,
-                    show_prediction,
-                    thresholds):
+            output_tree,
+            min_support,
+            only_named_clades,
+            min_length,
+            show_percentiles,
+            show_relative_divergence,
+            show_prediction,
+            thresholds):
         """Read distribution file.
 
         Parameters
@@ -76,10 +75,10 @@ class MarkTree():
         """
 
         # make sure we have a TreeNode object
-        tree = dendropy.Tree.get_from_path(input_tree, 
-                                            schema='newick', 
-                                            rooting='force-rooted', 
-                                            preserve_underscores=True)
+        tree = dendropy.Tree.get_from_path(input_tree,
+                                           schema='newick',
+                                           rooting='force-rooted',
+                                           preserve_underscores=True)
 
         # calculate relative distance for all nodes
         rd = RelativeDistance()
@@ -93,7 +92,8 @@ class MarkTree():
         incorrect = defaultdict(int)
 
         fout = open(output_tree + '.info', 'w')
-        fout.write('Taxon name\tPredicted rank\tRelative divergence\tCurrent rank percentile\tPredicted rank percentile\n')
+        fout.write(
+            'Taxon name\tPredicted rank\tRelative divergence\tCurrent rank percentile\tPredicted rank percentile\n')
         for n in tree.preorder_node_iter():
             if n.is_leaf():
                 continue
@@ -134,7 +134,7 @@ class MarkTree():
                         predicted_rank = self.rank_prefixes[rank_index]
 
                 n.label += predicted_rank
-            
+
             if show_relative_divergence:
                 n.label += '[rd=%.2f]' % n.rel_dist
 
@@ -156,4 +156,5 @@ class MarkTree():
             correct_taxa = correct[rank_prefix.lower()]
             incorrect_taxa = incorrect[rank_prefix.lower()]
             total_taxa = max(correct_taxa + incorrect_taxa, 1)
-            self.logger.info('  %s\t%d of %d (%.2f%%)' % (rank_prefix, correct_taxa, total_taxa, correct_taxa * 100.0 / total_taxa))
+            self.logger.info(
+                '  %s\t%d of %d (%.2f%%)' % (rank_prefix, correct_taxa, total_taxa, correct_taxa * 100.0 / total_taxa))

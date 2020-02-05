@@ -1,3 +1,5 @@
+0.0.43
+- added f-measure plot for comparing one or more models
 0.0.42
 - fixed bug resulting in RED dictionary file not being created
 0.0.41

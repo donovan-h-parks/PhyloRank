@@ -15,21 +15,18 @@
 #                                                                             #
 ###############################################################################
 
-import os
-import sys
 import logging
-from collections import defaultdict, namedtuple
+import os
+from collections import defaultdict
 
-from phylorank.rel_dist import RelativeDistance
-from phylorank.newick import parse_label
-from phylorank.common import get_phyla_lineages
-
+import dendropy
 from biolib.taxonomy import Taxonomy
-
 from numpy import (mean as np_mean,
                    std as np_std)
-                   
-import dendropy
+
+from phylorank.common import get_phyla_lineages
+from phylorank.newick import parse_label
+from phylorank.rel_dist import RelativeDistance
 
 
 class RdRanks():
@@ -41,7 +38,7 @@ class RdRanks():
     def __init__(self):
         """Initialize."""
         self.logger = logging.getLogger()
-        
+
     def write_rank_count(self, ranks_below_taxon, results_table):
         """Write table indicating number of ranks below each taxa.
 
@@ -52,16 +49,16 @@ class RdRanks():
         results_table : str
             Desired output file.
         """
-        
+
         # determine if count is a scalar or vectors
         taxon = ranks_below_taxon.keys()[0]
         rank_prefix = ranks_below_taxon[taxon].keys()[0]
         count = ranks_below_taxon[taxon][rank_prefix]
-        
+
         count_is_scalar = True
         if isinstance(count, (list, tuple)):
             count_is_scalar = False
-        
+
         # write out results sorted by taxonomic rank        
         sorted_taxon = []
         for rank_prefix in (['root'] + list(Taxonomy.rank_prefixes) + ['RS_', 'GB_', 'U_']):
@@ -69,24 +66,24 @@ class RdRanks():
             for taxon in ranks_below_taxon:
                 if taxon.startswith(rank_prefix):
                     taxa_at_rank.append(taxon)
-                    
+
             sorted_taxon += sorted(taxa_at_rank)
-            
+
         fout = open(results_table, 'w')
         fout.write('Taxon')
         for rank_prefix in Taxonomy.rank_prefixes:
             if count_is_scalar:
                 fout.write('\t%s' % rank_prefix.capitalize())
             else:
-                fout.write('\t%s\t%s\t%s\t%s' % ('Mean: ' + rank_prefix.capitalize(), 
-                                                    'Std: ' + rank_prefix.capitalize(),
-                                                    'Min: ' + rank_prefix.capitalize(),
-                                                    'Max: ' + rank_prefix.capitalize()))
+                fout.write('\t%s\t%s\t%s\t%s' % ('Mean: ' + rank_prefix.capitalize(),
+                                                 'Std: ' + rank_prefix.capitalize(),
+                                                 'Min: ' + rank_prefix.capitalize(),
+                                                 'Max: ' + rank_prefix.capitalize()))
         fout.write('\n')
-            
+
         for taxon in sorted_taxon:
             fout.write(taxon)
-            
+
             for rank_prefix in Taxonomy.rank_prefixes:
                 count = ranks_below_taxon[taxon][rank_prefix.capitalize()]
                 if count_is_scalar:
@@ -96,9 +93,9 @@ class RdRanks():
                         fout.write('\t%.1f\t%.2f\t%d\t%d' % (np_mean(count), np_std(count), min(count), max(count)))
                     else:
                         fout.write('\t%d\t%d\t%d\t%d' % (0, 0, 0, 0))
-                    
+
             fout.write('\n')
-                
+
         fout.close()
 
     def run(self, input_tree, rd_thresholds, output_dir):
@@ -118,12 +115,12 @@ class RdRanks():
         tree = TreeNode.read(input_tree, convert_underscores=False)
         phyla = get_phyla_lineages(tree)
         self.logger.info('Identified %d phyla for rooting.' % len(phyla))
-        
+
         self.logger.info('Reading taxonomy from tree.')
         taxonomy_file = os.path.join(output_dir, 'taxonomy.tsv')
         taxonomy = Taxonomy().read_from_tree(input_tree)
         Taxonomy().write(taxonomy, taxonomy_file)
-        
+
         rd = RelativeDistance()
         overall_ranks_below_taxon = defaultdict(lambda: defaultdict(list))
         for p in phyla:
@@ -139,10 +136,10 @@ class RdRanks():
             os.system('genometreetk outgroup %s %s %s %s' % (input_tree, taxonomy_file, p, output_tree))
 
             # calculate relative distance for all nodes
-            cur_tree = dendropy.Tree.get_from_path(output_tree, 
-                                                schema='newick', 
-                                                rooting='force-rooted', 
-                                                preserve_underscores=True)
+            cur_tree = dendropy.Tree.get_from_path(output_tree,
+                                                   schema='newick',
+                                                   rooting='force-rooted',
+                                                   preserve_underscores=True)
             rd.decorate_rel_dist(cur_tree)
 
             # determine ranks
@@ -151,18 +148,18 @@ class RdRanks():
                 for rank_prefix, threshold in rd_thresholds.iteritems():
                     if n.rel_dist >= threshold and n.parent_node.rel_dist < threshold:
                         ranks.append(rank_prefix.capitalize() + '__')
-                        
+
                 if ranks:
                     if not n.label:
                         n.label = '|%s [rd=%.2f]' % (';'.join(ranks), n.rel_dist)
                     else:
                         n.label += '|%s [rd=%.2f]' % (';'.join(ranks), n.rel_dist)
 
-            cur_tree.write_to_path(os.path.join(phylum_dir, 'rd_ranks.tree'), 
-                                    schema='newick', 
-                                    suppress_rooting=True, 
-                                    unquoted_underscores=True)
-            
+            cur_tree.write_to_path(os.path.join(phylum_dir, 'rd_ranks.tree'),
+                                   schema='newick',
+                                   suppress_rooting=True,
+                                   unquoted_underscores=True)
+
             # determine number of ranks below root and all named nodes
             ranks_below_taxon = defaultdict(lambda: defaultdict(int))
             for cur_node in cur_tree.postorder_node_iter():
@@ -174,11 +171,11 @@ class RdRanks():
                         continue
                 else:
                     continue
-                        
+
                 for n in cur_node.postorder_iter():
                     if not n.label:
                         continue
-                        
+
                     _support, _taxon, auxiliary_info = parse_label(n.label)
                     if auxiliary_info:
                         ranks = auxiliary_info[0:auxiliary_info.rfind('[')]
@@ -186,16 +183,16 @@ class RdRanks():
 
                         for r in ranks:
                             ranks_below_taxon[cur_taxon][r] += 1
-                            
+
             for taxon in ranks_below_taxon:
                 if taxon == p or taxon in phylum_children:
                     # do not record results for named groups in the lineage 
                     # used for rooting
                     continue
-                    
+
                 for rank, count in ranks_below_taxon[taxon].iteritems():
                     overall_ranks_below_taxon[taxon][rank].append(count)
-                            
+
             results_table = os.path.join(phylum_dir, 'rd_ranks.tsv')
             self.write_rank_count(ranks_below_taxon, results_table)
 
