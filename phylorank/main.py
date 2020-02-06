@@ -34,6 +34,7 @@ from phylorank.mark_tree import MarkTree
 from phylorank.newick import parse_label
 from phylorank.outliers import Outliers
 from phylorank.plot.distribution_plot import DistributionPlot
+from phylorank.plot.fm_plot import FMPlot
 from phylorank.plot.robustness_plot import RobustnessPlot
 from phylorank.rd_ranks import RdRanks
 from phylorank.rel_dist import RelativeDistance
@@ -367,7 +368,7 @@ class OptionsParser():
 
         self.logger.info('Optimal branch length is %f.' % optimal_bl)
         self.logger.info('This results in %d correct and %d incorrect taxa (precision = %.2f).' % (
-        correct_taxa, incorrect_taxa, prec))
+            correct_taxa, incorrect_taxa, prec))
 
     def bl_decorate(self, options):
         """Decorate tree based using a mean branch length criterion."""
@@ -471,6 +472,16 @@ class OptionsParser():
 
         self.logger.info('Done.')
 
+    def fm_plot(self, options):
+        """Visualise one or more f-measure plots."""
+        check_file_exists(options.input_file)
+        check_file_exists(options.taxonomy_file)
+        make_sure_path_exists(os.path.dirname(options.output_file))
+
+        fm_plot = FMPlot(options.input_file, options.taxonomy_file)
+        fm_plot.plot(options.hide_legend, options.output_file)
+        self.logger.info('Done.')
+
     def parse_options(self, options):
         """Parse user options and call the correct pipeline(s)"""
 
@@ -508,6 +519,8 @@ class OptionsParser():
             self.bl_table(options)
         elif (options.subparser_name == 'rank_res'):
             self.rank_res(options)
+        elif options.subparser_name == 'fm_plot':
+            self.fm_plot(options)
         else:
             self.logger.error('  [Error] Unknown PhyloRank command: ' + options.subparser_name + '\n')
             sys.exit()

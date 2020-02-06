@@ -74,6 +74,9 @@ def print_help():
     bl_optimal  -> Determine branch length for best congruency with existing taxonomy
     bl_decorate -> Decorate tree using a mean branch length criterion
     bl_table    -> Produce table with number of lineage for increasing mean branch lengths
+    
+  Data visualisation:
+    fm_plot     -> Compare one or more F-Measure tables produced by decorate.
   
   [Expert commands: hide these at some point]
 
@@ -385,6 +388,15 @@ if __name__ == '__main__':
     rank_res_parser.add_argument('output_file', help="output file with resolution of taxa at each rank")
     rank_res_parser.add_argument('--taxa_file', help="output file indicating taxa within each resolution category",
                                  default=None)
+
+    fm_plot_parser = subparsers.add_parser('fm_plot',
+                                            formatter_class=CustomHelpFormatter,
+                                            description='Compare one or more F-Measure tables produced by decorate.')
+
+    fm_plot_parser.add_argument('input_file', help="tsv file as: model_name<tab>decorate_table_path")
+    fm_plot_parser.add_argument('taxonomy_file', help="file with taxonomy for extant taxa")
+    fm_plot_parser.add_argument('output_file', help="the location to store the plot")
+    fm_plot_parser.add_argument('--hide_legend', action="store_true", default=False, help="don't plot a legend")
 
     # get and check options
     args = None

@@ -19,5 +19,6 @@ setup(
     url='http://pypi.python.org/pypi/phylorank/',
     license='GPL3',
     description='Assigns taxonomic ranks based on evolutionary divergence.',
-    install_requires=["biolib >= 0.0.46", 'dendropy', 'numpy', 'mpld3', 'scipy'],
+    install_requires=["biolib >= 0.0.46", 'dendropy', 'numpy', 'mpld3', 'scipy',
+                      'ete3'],
 )
