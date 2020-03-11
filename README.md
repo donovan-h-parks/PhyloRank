@@ -12,7 +12,7 @@ PhyloRank provides functionality for calculating the relative evolutionary diver
 The simplest way to install this package is through pip:
 > sudo pip install phylorank
 
-This package makes use of the [numpy](http://www.numpy.org/), [matplotlib](https://matplotlib.org), [mpld3 (>=0.2)](http://mpld3.github.io/), [jinja2 (>=2.7.3)](http://jinja.pocoo.org/docs/2.10/), and [dendropy (>=4.1.0)](https://www.dendropy.org/) Python libraries. These must be install seperately. It also required biolib (>=0.0.46), but this will be install with PhyloRank if you are doing the installation through pip.
+This package makes use of the [numpy](http://www.numpy.org/), [matplotlib](https://matplotlib.org), [jinja2 (>=2.7.3)](http://jinja.pocoo.org/docs/2.10/), and [dendropy (>=4.1.0)](https://www.dendropy.org/) Python libraries. These must be install seperately. PhyloRank also uses [mpld3 (>=0.2)](http://mpld3.github.io/) which has been explicitly added to this package. It also required biolib (>=0.1.0), but this will be install with PhyloRank if you are doing the installation through pip.
 
 ## Calculating RED
 
