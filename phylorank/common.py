@@ -77,7 +77,7 @@ def filter_taxa_for_dist_inference(tree,
 
     # sanity check species names as these are a common problem
     species = set()
-    for taxon_id, taxa in taxonomy.iteritems():
+    for taxon_id, taxa in taxonomy.items():
         if len(taxa) > Taxonomy.rank_index['s__']:
             species_name = taxa[Taxonomy.rank_index['s__']]
             valid, error_msg = True, None
@@ -85,7 +85,7 @@ def filter_taxa_for_dist_inference(tree,
                 valid, error_msg = Taxonomy().validate_species_name(species_name, require_full=True, require_prefix=True)
                 
             if not valid and report_invalid_sp:
-                print '[Warning] Species name %s for %s is invalid: %s' % (species_name, taxon_id, error_msg)
+                print('[Warning] Species name %s for %s is invalid: %s' % (species_name, taxon_id, error_msg))
                 continue
                 
             species.add(species_name)
@@ -109,8 +109,8 @@ def filter_taxa_for_dist_inference(tree,
 
         if not support and min_support > 0:
             # no support value, so inform user if they were trying to filter on this property
-            print '[Error] Tree does not contain support values. As such, --min_support must be set to 0.'
-            sys.exit()
+            print('[Error] Tree does not contain support values. As such, --min_support must be set to 0.')
+            sys.exit(-1)
             
         if fmeasure and fmeasure[taxon] < min_fmeasure:
             continue

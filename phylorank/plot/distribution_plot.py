@@ -44,8 +44,8 @@ class DistributionPlot(AbstractPlot):
 
     def __init__(self):
         """Initialize."""
-        Options = namedtuple('Options', 'width height font_size dpi')
-        options = Options(6, 6, 12, 96)
+        Options = namedtuple('Options', 'width height label_font_size tick_font_size dpi')
+        options = Options(6, 6, 12, 12, 96)
 
         AbstractPlot.__init__(self, options)
 
@@ -62,25 +62,25 @@ class DistributionPlot(AbstractPlot):
             Prefix for plots.
         """
 
-        print ''
-        print '  Relative divergence thresholds (rank, threshold, parent taxa, child taxa):'
+        print('')
+        print('  Relative divergence thresholds (rank, threshold, parent taxa, child taxa):')
 
         ranks = sorted(rel_dists.keys())
         rel_dist_thresholds = []
-        for i in xrange(ranks[0], ranks[-1]):
+        for i in range(ranks[0], ranks[-1]):
             parent_rank = i
             child_rank = i + 1
 
             # determine classification results for relative divergence
             # values between the medians of adjacent taxonomic ranks
             parent_rds = []
-            for taxa, rd in rel_dists[parent_rank].iteritems():
+            for taxa, rd in rel_dists[parent_rank].items():
                 if taxa in taxa_for_dist_inference:
                     parent_rds.append(rd)
             parent_p50 = np_percentile(parent_rds, 50)
 
             child_rds = []
-            for taxa, rd in rel_dists[child_rank].iteritems():
+            for taxa, rd in rel_dists[child_rank].items():
                 if taxa in taxa_for_dist_inference:
                     child_rds.append(rd)
 
@@ -115,13 +115,13 @@ class DistributionPlot(AbstractPlot):
             max_mean = max(y_mean_corr)
             r_max_values = [r[i] for i, rd in enumerate(y_mean_corr) if rd == max_mean]
             r_max_value = np_mean(r_max_values)  # Note: this will fail if there are multiple local maxima
-            print '    %s\t%.3f\t%d\t%d' % (Taxonomy.rank_labels[parent_rank], r_max_value, len(parent_rds), len(child_rds))
+            print('    %s\t%.3f\t%d\t%d' % (Taxonomy.rank_labels[parent_rank], r_max_value, len(parent_rds), len(child_rds)))
 
             # check that there is a single local maximum
             rd_indices = [i for i, rd in enumerate(y_mean_corr) if rd == max_mean]
-            for rd_index in xrange(0, len(rd_indices) - 1):
+            for rd_index in range(0, len(rd_indices) - 1):
                 if rd_indices[rd_index] != rd_indices[rd_index + 1] - 1:
-                    print '[Warning] There are multiple local maxima, so estimated relative divergence threshold will be invalid.'
+                    print('[Warning] There are multiple local maxima, so estimated relative divergence threshold will be invalid.')
 
             rel_dist_thresholds.append(r_max_value)
 
@@ -137,7 +137,7 @@ class DistributionPlot(AbstractPlot):
             self.fig.tight_layout(pad=1)
             self.fig.savefig(output_prefix + '.%s_%s.png' % (Taxonomy.rank_labels[parent_rank], Taxonomy.rank_labels[child_rank]), dpi=96)
 
-        print ''
+        print('')
 
         return rel_dist_thresholds
 
@@ -164,7 +164,7 @@ class DistributionPlot(AbstractPlot):
 
         # create normal distributions
         for i, rank in enumerate(sorted(rel_dists.keys())):
-            v = [dist for taxa, dist in rel_dists[rank].iteritems() if taxa in taxa_for_dist_inference]
+            v = [dist for taxa, dist in rel_dists[rank].items() if taxa in taxa_for_dist_inference]
             u = np_mean(v)
             rv = norm(loc=u, scale=np_std(v))
             x = np_linspace(rv.ppf(0.001), rv.ppf(0.999), 1000)
@@ -175,7 +175,7 @@ class DistributionPlot(AbstractPlot):
         # create percentile lines
         percentiles = {}
         for i, rank in enumerate(sorted(rel_dists.keys())):
-            v = [dist for taxa, dist in rel_dists[rank].iteritems() if taxa in taxa_for_dist_inference]
+            v = [dist for taxa, dist in rel_dists[rank].items() if taxa in taxa_for_dist_inference]
             p10, p50, p90 = np_percentile(v, [10, 50, 90])
             ax.plot((p10, p10), (i, i + 0.5), 'r-', zorder=2)
             ax.plot((p50, p50), (i, i + 0.5), 'r-', zorder=2)
@@ -196,7 +196,7 @@ class DistributionPlot(AbstractPlot):
             rank_label = Taxonomy.rank_labels[rank]
             rank_labels.append(rank_label + ' (%d)' % len(rel_dists[rank]))
 
-            for clade_label, dist in rel_dists[rank].iteritems():
+            for clade_label, dist in rel_dists[rank].items():
                 x.append(dist)
                 y.append(i)
                 labels.append(clade_label)
@@ -232,7 +232,7 @@ class DistributionPlot(AbstractPlot):
         ax.set_xlim([-0.05, 1.05])
 
         ax.set_ylabel('rank (no. taxa)')
-        ax.set_yticks(xrange(0, len(rel_dists)))
+        ax.set_yticks(range(0, len(rel_dists)))
         ax.set_ylim([-0.2, len(rel_dists) - 0.01])
         ax.set_yticklabels(rank_labels)
 
@@ -295,10 +295,10 @@ class DistributionPlot(AbstractPlot):
         rel_dists = rd.rel_dist_to_named_clades(tree, taxa_to_plot)
 
         # report number of taxa at each rank
-        print ''
-        print '  Number of taxa plotted at each taxonomic rank:'
-        for rank, taxa in rel_dists.iteritems():
-            print '    %s\t%d' % (Taxonomy.rank_labels[rank], len(taxa))
+        print('')
+        print('  Number of taxa plotted at each taxonomic rank:')
+        for rank, taxa in rel_dists.items():
+            print('    %s\t%d' % (Taxonomy.rank_labels[rank], len(taxa)))
 
         # create performance plots
         rel_dist_thresholds = self._percent_correct_plot(rel_dists, taxa_for_dist_inference, output_prefix)

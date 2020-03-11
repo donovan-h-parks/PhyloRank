@@ -174,7 +174,7 @@ class BranchLengthDistribution():
         fout = open(output_table, 'w')
         header = 'Threshold\tCorrect\tIncorrect\tPrecision\tNo. Lineages\tNo. Multiple Taxa Lineages\tNo. Terminal Lineages'
         fout.write(header + '\n')
-        print header
+        print(header)
         
         top_correct = 0
         top_incorrect = 0
@@ -211,7 +211,7 @@ class BranchLengthDistribution():
                                                             num_terminal_lineages)
                                                             
             fout.write(row + '\n')
-            print row
+            print(row)
             
             if precision > top_precision:
                 top_correct = correct
@@ -553,9 +553,9 @@ class BranchLengthDistribution():
                         if i != perc_10th_index and i != perc_90th_index:
                             nodes_to_prune.add(t.taxon)
                 
-            print 'before prune', sum([1 for _ in tree.leaf_node_iter()])
+            print('before prune', sum([1 for _ in tree.leaf_node_iter()]))
             tree.prune_taxa(nodes_to_prune)
-            print 'after prune', sum([1 for _ in tree.leaf_node_iter()])
+            print('after prune', sum([1 for _ in tree.leaf_node_iter()]))
                         
         self.logger.info('Decorated %d internal nodes.' % sum(new_name_number.values()))
         #self.logger.info('NCBI-only %d; SRA-only %d' % (ncbi_only, sra_only))
@@ -654,12 +654,12 @@ class BranchLengthDistribution():
                     rank_bl_dist[rank].append(np_mean(taxa_bl_dist[taxon]))
                             
         # report number of taxa at each rank
-        print ''
-        print 'Rank\tTaxa\tTaxa for Inference'
-        for rank, taxa in taxa_at_rank.iteritems():
+        print('')
+        print('Rank\tTaxa\tTaxa for Inference')
+        for rank, taxa in taxa_at_rank.items():
             taxa_for_inference = [x for x in taxa if x in taxa_for_dist_inference]
-            print '%s\t%d\t%d' % (Taxonomy.rank_labels[rank], len(taxa), len(taxa_for_inference))
-        print ''
+            print('%s\t%d\t%d' % (Taxonomy.rank_labels[rank], len(taxa), len(taxa_for_inference)))
+        print('')
                     
         # report results sorted by rank
         sorted_taxon = []

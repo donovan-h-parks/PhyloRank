@@ -176,7 +176,7 @@ class OptionsParser():
                 closest_rank = rank_label
                 closest_dist = 1e6
                 if r2 < rank_median - 0.1 or r2 > rank_median + 0.1:
-                    for rank, median_red in median_reds.iteritems():
+                    for rank, median_red in median_reds.items():
                         d = abs(r2 - median_red)
                         if d < closest_dist:
                             closest_dist = d
@@ -214,7 +214,7 @@ class OptionsParser():
     def mark_tree(self, options):
         """Mark tree command."""
 
-        check_file_exists(options.input_tree_dir)
+        check_file_exists(options.input_tree)
 
         mt = MarkTree()
         mt.run(options.input_tree,
@@ -295,7 +295,7 @@ class OptionsParser():
                 fout.write('\t-' * Taxonomy.rank_index[rank_prefix])
 
                 next_taxa = [taxon]
-                for _ in xrange(Taxonomy.rank_index[rank_prefix], Taxonomy.rank_index['s__'] + 1):
+                for _ in range(Taxonomy.rank_index[rank_prefix], Taxonomy.rank_index['s__'] + 1):
                     children_taxa = set()
                     for t in next_taxa:
                         children_taxa.update(taxon_children[t])

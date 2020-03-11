@@ -1,4 +1,5 @@
-#!/srv/sw/python/2.7.4/bin/python
+#!/usr/bin/env python3
+
 ###############################################################################
 #                                                                             #
 #    This program is free software: you can redistribute it and/or modify     #
@@ -48,17 +49,20 @@ def version():
 
 def print_help():
     """Help menu."""
+    
+    # Deprecated:
+    # rd_ranks    -> Calculate number of taxa for specified RED thresholds
+    # dist_plot   -> Plot distribution of taxa in each taxonomic rank
+    # robustness_plot -> Plot relative distance of groups across a set of trees.
 
-    print ''
-    print '                ...::: PhyloRank v' + version() + ' :::...'''
-    print '''\
+    print('')
+    print('                ...::: PhyloRank v' + version() + ' :::...''')
+    print('''\
 
   Curation methods:
     outliers    -> Create RED table, scaled tree, and plot useful for identifying taxonomic outliers
     scale_tree  -> Scale a rooted tree based on RED
     compare_red -> Compare RED values of taxa calculated over different trees
-    rd_ranks    -> Calculate number of taxa for specified RED thresholds
-    dist_plot   -> Plot distribution of taxa in each taxonomic rank
     mark_tree   -> Mark nodes with distribution information and predicted taxonomic ranks
     rogue_test  -> Index indicating the incongruence of genomes over a set of tree
 
@@ -72,17 +76,12 @@ def print_help():
     bl_optimal  -> Determine branch length for best congruency with existing taxonomy
     bl_decorate -> Decorate tree using a mean branch length criterion
     bl_table    -> Produce table with number of lineage for increasing mean branch lengths
-  
-  [Expert commands: hide these at some point]
-
-  robustness_plot -> Plot relative distance of groups across a set of trees.
-
 
   Use: phylorank <command> -h for command specific help.
 
   Feature requests or bug reports can be sent to Donovan Parks (donovan.parks@gmail.com)
-    or posted on GitHub (https://github.com/dparks1134/autorank).
-    '''
+    or posted on GitHub (https://github.com/dparks1134/phylorank.)
+    ''')
 
 def logger_setup(log_file, silent):
     """Set logging for application.
@@ -325,7 +324,6 @@ if __name__ == '__main__':
     rank_res_parser.add_argument('output_file', help="output file with resolution of taxa at each rank")
     rank_res_parser.add_argument('--taxa_file', help="output file indicating taxa within each resolution category", default=None)
 
-
     # get and check options
     args = None
     if(len(sys.argv) == 1 or sys.argv[1] == '-h' or sys.argv == '--help'):
@@ -361,7 +359,7 @@ if __name__ == '__main__':
         else:
             parser.parse_options(args)
     except SystemExit:
-        print "\n  Controlled exit resulting from an unrecoverable error or warning."
+        print("\n  Controlled exit resulting from an unrecoverable error or warning.")
     except:
-        print "\nUnexpected error:", sys.exc_info()[0]
+        print("\nUnexpected error:", sys.exc_info()[0])
         raise

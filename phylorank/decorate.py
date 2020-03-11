@@ -95,11 +95,12 @@ class Decorate():
     
         # find node with best F-measure for each taxon
         fmeasure_for_taxa = {}
-        for rank_index in xrange(0, len(Taxonomy.rank_labels)):
+        for rank_index in range(0, len(Taxonomy.rank_labels)):
             #if rank_index == 6: #*** skip species
             #    continue 
-            self.logger.info('Processing %d taxa at %s rank.' % (len(taxa_at_rank[rank_index]),
-                                                                    Taxonomy.rank_labels[rank_index].capitalize()))
+            self.logger.info('Processing {:,} taxa at {} rank.'.format(
+                                len(taxa_at_rank[rank_index]),
+                                Taxonomy.rank_labels[rank_index].capitalize()))
             
             for taxon in taxa_at_rank[rank_index]: 
                 if rank_index == 0:
@@ -299,7 +300,7 @@ class Decorate():
         
         # fill in missing ranks
         last_rank = ordered_taxa[-1][0:3]
-        for i in xrange(Taxonomy.rank_prefixes.index(last_rank)+1,len(Taxonomy.rank_prefixes)):
+        for i in range(Taxonomy.rank_prefixes.index(last_rank)+1,len(Taxonomy.rank_prefixes)):
             ordered_taxa.append(Taxonomy.rank_prefixes[i])
 
         return ordered_taxa
@@ -311,19 +312,19 @@ class Decorate():
             if taxon == Taxonomy.rank_prefixes[rank_index]:
                 # taxon is missing, check if any child taxon are specified
                 specified = False
-                for r in xrange(rank_index+1, Taxonomy.rank_labels.index('species')+1):
+                for r in range(rank_index+1, Taxonomy.rank_labels.index('species')+1):
                     if taxa_list[r] != Taxonomy.rank_prefixes[r]:
                         specified = True
                         break
                         
                 if specified:
                     # fill in missing ranks
-                    for i in xrange(rank_index, r):
+                    for i in range(rank_index, r):
                         taxon_label = '%s{unclassified %s}' % (Taxonomy.rank_prefixes[i],
                                                                 taxa_list[rank_index-1][3:])
                         taxa_list[i] = taxon_label
                         
-                        print taxa_list
+                        print(taxa_list)
                         
         return taxa_list
         

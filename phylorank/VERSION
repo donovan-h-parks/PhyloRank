@@ -1,3 +1,8 @@
+0.1.0
+- port code to Python 3
+
+0.0.43
+- output SVG for fixed root trees
 0.0.42
 - fixed bug resulting in RED dictionary file not being created
 0.0.41

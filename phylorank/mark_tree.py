@@ -98,7 +98,7 @@ class MarkTree():
             if n.is_leaf():
                 continue
 
-            if n.edge_length < min_length:
+            if n.edge_length and n.edge_length < min_length:
                 continue
 
             # parse taxon name and support value from node label
@@ -126,7 +126,7 @@ class MarkTree():
                 # calculate distance to each median threshold
                 min_dist = 1e6
                 predicted_rank = None
-                for rank, threshold in thresholds.iteritems():
+                for rank, threshold in thresholds.items():
                     d = abs(n.rel_dist - threshold)
                     if d < min_dist:
                         min_dist = d
@@ -150,10 +150,16 @@ class MarkTree():
                 fout.write('%s\t%s\t%.3f\n' % (taxon_name, predicted_rank, n.rel_dist))
 
         fout.close()
-        root.write(output_tree)
+        tree.write_to_path(output_tree, 
+                            schema='newick', 
+                            suppress_rooting=True, 
+                            unquoted_underscores=True)
 
         for rank_prefix in self.rank_prefixes[1:7]:
             correct_taxa = correct[rank_prefix.lower()]
             incorrect_taxa = incorrect[rank_prefix.lower()]
-            total_taxa = max(correct_taxa + incorrect_taxa, 1)
-            self.logger.info('  %s\t%d of %d (%.2f%%)' % (rank_prefix, correct_taxa, total_taxa, correct_taxa * 100.0 / total_taxa))
+            total_taxa = correct_taxa + incorrect_taxa
+            if total_taxa > 0:
+                self.logger.info('  {}\t{:,} of {:,} ({:.2f}%)'.format(rank_prefix.lower(), correct_taxa, total_taxa, correct_taxa * 100.0 / total_taxa))
+            else:
+                self.logger.info('  No taxa at rank {}.'.format(rank_prefix))

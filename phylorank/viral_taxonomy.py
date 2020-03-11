@@ -169,7 +169,7 @@ def read_viral_taxonomy_from_tree(tree):
             logger.error('Taxon {} is missing rank prefix: {}'.format(leaf.taxon.label, ';'.join(taxa)))
             sys.exit(-1)
         
-        for i in xrange(last_rank+1, len(VIRAL_RANK_PREFIXES)):
+        for i in range(last_rank+1, len(VIRAL_RANK_PREFIXES)):
             taxa.append(VIRAL_RANK_PREFIXES[i])
 
         taxonomy[leaf.taxon.label] = taxa

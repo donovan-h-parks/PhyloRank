@@ -33,7 +33,7 @@ import dendropy
 
 
 class RdRanks():
-    """ Calculate number of taxa for specified relative divergence thresholds.
+    """Calculate number of taxa for specified relative divergence thresholds.
 
         <blah>
     """
@@ -115,7 +115,10 @@ class RdRanks():
         """
 
         # get list of phyla level lineages
-        tree = TreeNode.read(input_tree, convert_underscores=False)
+        tree = tree = dendropy.Tree.get_from_path(input_tree, 
+                                            schema='newick', 
+                                            rooting='force-rooted', 
+                                            preserve_underscores=True)
         phyla = get_phyla_lineages(tree)
         self.logger.info('Identified %d phyla for rooting.' % len(phyla))
         
@@ -148,7 +151,7 @@ class RdRanks():
             # determine ranks
             for n in cur_tree.postorder_node_iter(lambda n: n != tree.seed_node):
                 ranks = []
-                for rank_prefix, threshold in rd_thresholds.iteritems():
+                for rank_prefix, threshold in rd_thresholds.items():
                     if n.rel_dist >= threshold and n.parent_node.rel_dist < threshold:
                         ranks.append(rank_prefix.capitalize() + '__')
                         
@@ -193,7 +196,7 @@ class RdRanks():
                     # used for rooting
                     continue
                     
-                for rank, count in ranks_below_taxon[taxon].iteritems():
+                for rank, count in ranks_below_taxon[taxon].items():
                     overall_ranks_below_taxon[taxon][rank].append(count)
                             
             results_table = os.path.join(phylum_dir, 'rd_ranks.tsv')
