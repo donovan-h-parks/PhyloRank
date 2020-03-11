@@ -14,6 +14,8 @@ The simplest way to install this package is through pip:
 
 This package makes use of the [numpy](http://www.numpy.org/), [matplotlib](https://matplotlib.org), [jinja2 (>=2.7.3)](http://jinja.pocoo.org/docs/2.10/), and [dendropy (>=4.1.0)](https://www.dendropy.org/) Python libraries. These must be install seperately. PhyloRank also uses [mpld3 (>=0.2)](http://mpld3.github.io/) which has been explicitly added to this package. It also required biolib (>=0.1.0), but this will be install with PhyloRank if you are doing the installation through pip.
 
+PhyloRank requires Python 3 starting with v0.1.0
+
 ## Calculating RED
 
 PhyloRank can calculate the relative evolutionary divergence (RED) of taxa in a tree in order to identify taxa at a given taxonomic rank that have conspicuous placements in the tree. This information can be used to refine the placement of taxa in the tree with the aim of taxa at the same rank having similar RED. RED values can be calculated using:
