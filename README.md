@@ -1,6 +1,6 @@
 # PhyloRank
 
-**If you are looking to classify genomes according to the methodology used by the [GTDB](http://gtdb.ecogenomic.org/), we recommend using our companion tool [GTDB-Tk](https://github.com/Ecogenomics/GtdbTk) instead of PhyloRank. PhyloRank is primarily intended for taxonomic curation on trees inferred from genomes spanning the bacterial or archaeal domain.**
+**If you are looking to classify genomes according to the methodology used by the [GTDB](http://gtdb.ecogenomic.org/), we recommend using our companion tool [GTDB-Tk](https://github.com/Ecogenomics/GtdbTk) instead of PhyloRank. PhyloRank is intended to aid the manual taxonomic curation of trees inferred from genomes spanning the bacterial or archaeal domain.**
 
 [![version status](https://img.shields.io/pypi/v/phylorank.svg)](https://pypi.python.org/pypi/phylorank)
 [![Downloads](https://pepy.tech/badge/phylorank/month)](https://pepy.tech/project/phylorank)
