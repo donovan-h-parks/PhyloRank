@@ -19,6 +19,6 @@ import os
 
 def version():
     """Read program version from file."""
-    import refinem
+    import phylorank
     version_file = open(os.path.join(__path__[0], 'VERSION'))
     return version_file.readline().strip()
