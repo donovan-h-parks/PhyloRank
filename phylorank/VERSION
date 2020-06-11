@@ -1,3 +1,7 @@
+0.1.1
+- fixed reporting of package version
+- fixed Python 3 porting issue with viral_taxonomy.py
+
 0.1.0
 - port code to Python 3
 

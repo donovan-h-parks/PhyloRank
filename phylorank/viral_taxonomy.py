@@ -66,7 +66,7 @@ def translate_viral_taxonomy(taxonomy):
 def translate_viral_tree(tree):
     """Translate prefixes of viral taxonomy in tree to prokaryotic prefixes."""
     
-    if isinstance(tree, basestring):
+    if isinstance(tree, str):
         tree = dendropy.Tree.get_from_path(tree, 
                                             schema='newick', 
                                             rooting="force-rooted", 
@@ -99,7 +99,7 @@ def rev_translate_output_file(output_file):
     if not os.path.exists(output_file):
         print('File does not exists: {}'.format(output_file))
         sys.exit(-1)
-        
+
     with open(output_file) as f:
         content = f.read()
     
@@ -125,7 +125,7 @@ def read_viral_taxonomy_from_tree(tree):
         Taxa indexed by unique ids.
     """
 
-    if isinstance(tree, basestring):
+    if isinstance(tree, str):
         tree = dendropy.Tree.get_from_path(tree, 
                                             schema='newick', 
                                             rooting="force-rooted", 

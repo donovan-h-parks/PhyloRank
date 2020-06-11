@@ -812,6 +812,25 @@ class Outliers(AbstractPlot):
                 
         fout.close()
         
+    def _write_rd_tree(self, tree, rel_node_dists, output_tree):
+        """Write out tree with RED specified at each internal node."""
+
+        for node_id, n in enumerate(tree.preorder_node_iter()):
+            if n == tree.seed_node:
+                red = 0
+            else:
+                red = np_median(rel_node_dists[node_id])
+                
+            if n.is_leaf():
+                n.taxon.label += "|RED={:.3f}".format(red)
+            else:
+                n.label += "|RED={:.3f}".format(red)
+        
+        tree.write_to_path(output_tree, 
+                            schema='newick', 
+                            suppress_rooting=True, 
+                            unquoted_underscores=True)
+        
     def read_fmeasure(self, fmeasure_table):
         """Read table with F-measure for taxa."""
         
@@ -878,6 +897,7 @@ class Outliers(AbstractPlot):
                                             rooting='force-rooted', 
                                             preserve_underscores=True)
 
+        orig_tree = tree.clone(depth=1)
         input_tree_name = os.path.splitext(os.path.basename(input_tree))[0]
 
         # pull taxonomy from tree and file
@@ -916,9 +936,8 @@ class Outliers(AbstractPlot):
                                                                     fmeasure,
                                                                     min_fmeasure,
                                                                     report_invalid_sp = not viral)
-        self.logger.info('Identified {:,} of {:,} taxa for use in inferring RED distribution.'.format(
-                            len(taxa_for_dist_inference), 
-                            len(taxonomy)))
+        self.logger.info('Identified {:,} taxa for use in inferring RED distribution.'.format(
+                            len(taxa_for_dist_inference)))
 
         # limit plotted taxa
         taxa_to_plot = None
@@ -1090,10 +1109,13 @@ class Outliers(AbstractPlot):
                                                 summary_median_outlier_table, 
                                                 summary_median_rank_file, 
                                                 verbose_table)
+                                                
+            output_rd_tree = os.path.join(self.output_dir, '{}.red_decorated.tree'.format(input_tree_name))
+            self._write_rd_tree(orig_tree, rel_node_dists, output_rd_tree)
 
         output_rd_file = os.path.join(self.output_dir, '{}.node_rd.tsv'.format(input_tree_name))
         self._write_rd(tree, output_rd_file)
-                                                
+
         output_tree = os.path.join(self.output_dir, '{}.scaled.tree'.format(input_tree_name))
         tree.write_to_path(output_tree, 
                             schema='newick', 
@@ -1106,7 +1128,7 @@ class Outliers(AbstractPlot):
             rev_translate_output_file(output_tree)
             rev_translate_output_file(summary_median_outlier_table)
             
-            rev_translate_output_file(dist_plot_file)
+            #rev_translate_output_file(dist_plot_file)
             dist_plot_file_html = dist_plot_file.replace('.png', '.html')
             if os.path.exists(dist_plot_file_html):
                 rev_translate_output_file(dist_plot_file_html)
