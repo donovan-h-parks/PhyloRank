@@ -1,3 +1,6 @@
+0.1.2
+- moved to color blind friendly scheme for PhyloRank plots
+
 0.1.1
 - fixed reporting of package version
 - fixed Python 3 porting issue with viral_taxonomy.py

@@ -75,7 +75,13 @@ class Outliers(AbstractPlot):
         options = Options(5, 4, 12, 12, 96)
 
         AbstractPlot.__init__(self, options)
+
+        self.poly_color = (89.0/255,89.0/255,89.0/255)
+        self.near_mono_color = (255.0/255,188.0/255,121.0/255)
+        self.mono_color = (95.0/255,158.0/255,209.0/255)
         
+        self.median_color = (0.0/255,107.0/255,164.0/255)
+
         self.dpi = dpi
         self.output_dir = output_dir
         
@@ -195,7 +201,7 @@ class Outliers(AbstractPlot):
                 continue
                 
             p10, p50, p90 = np_percentile(v, [10, 50, 90])
-            ax.plot((p50, p50), (i, i + 0.5), c=(0.0, 0.0, 1.0), lw=2, zorder=2)
+            ax.plot((p50, p50), (i, i + 0.5), c=self.median_color, lw=2, zorder=2)
 
             for b in [-0.1, 0.1]:
                 boundary = p50 + b
@@ -227,14 +233,15 @@ class Outliers(AbstractPlot):
                 y.append(i)
                 labels.append(clade_label)
 
+                
                 if ((highlight_polyphyly and fmeasure[clade_label] < fmeasure_mono) or clade_label in highlight_taxa):
-                    c.append((1.0,0.0,0.0))
+                    c.append(self.poly_color)
                     poly.append(dist)
                 elif (highlight_polyphyly and fmeasure[clade_label] != 1.0):
-                    c.append((255.0/255,187.0/255,120.0/255))
+                    c.append(self.near_mono_color)
                     nearly_mono.append(dist)
                 else:
-                    c.append((152.0/255,223.0/255,138.0/255))
+                    c.append(self.mono_color)
                     mono.append(dist)
             
                 # report results
@@ -265,7 +272,7 @@ class Outliers(AbstractPlot):
             bottom_mono = 0
             if len(mono) > 0:
                 bottom_mono, b, p = ax.hist(mono, bins=bins,
-                          color=(152.0/255,223.0/255,138.0/255),
+                          color=self.mono_color,
                           alpha=0.5,
                           weights=0.9 * (1.0 / max_bin_count) * np_ones_like(mono),
                           bottom=i,
@@ -275,7 +282,7 @@ class Outliers(AbstractPlot):
             bottom_nearly_mono = 0
             if len(nearly_mono) > 0:
                 bottom_nearly_mono, b, p = ax.hist(nearly_mono, bins=bins,
-                                                      color=(255.0/255,187.0/255,120.0/255),
+                                                      color=self.near_mono_color,
                                                       alpha=0.5,
                                                       weights=0.9 * (1.0 / max_bin_count) * np_ones_like(nearly_mono),
                                                       bottom=i + bottom_mono,
@@ -284,7 +291,7 @@ class Outliers(AbstractPlot):
 
             if len(poly) > 0:
                 ax.hist(poly, bins=bins,
-                          color=(1.0, 0.0, 0.0),
+                          color=self.poly_color,
                           alpha=0.5,
                           weights=0.9 * (1.0 / max_bin_count) * np_ones_like(poly),
                           bottom=i + bottom_mono + bottom_nearly_mono,
@@ -480,7 +487,7 @@ class Outliers(AbstractPlot):
                 continue
             
             p10, p50, p90 = np_percentile(v, [10, 50, 90])
-            ax.plot((p50, p50), (i, i + 0.5), c=(0.0, 0.0, 1.0), lw=2, zorder=2)
+            ax.plot((p50, p50), (i, i + 0.5), c=self.median_color, lw=2, zorder=2)
 
             for b in [-0.1, 0.1]:
                 boundary = p50 + b
@@ -513,13 +520,13 @@ class Outliers(AbstractPlot):
                 labels.append(clade_label)
 
                 if ((highlight_polyphyly and fmeasure[clade_label] < fmeasure_mono) or clade_label in highlight_taxa):
-                    c.append((1.0,0.0,0.0))
+                    c.append(self.poly_color)
                     poly.append(md)
                 elif (highlight_polyphyly and fmeasure[clade_label] != 1.0):
-                    c.append((255.0/255,187.0/255,120.0/255))
+                    c.append(self.near_mono_color)
                     near_mono.append(md)
                 else:
-                    c.append((152.0/255,223.0/255,138.0/255))
+                    c.append(self.mono_color)
                     mono.append(md)
 
             # histogram for each rank
@@ -534,7 +541,7 @@ class Outliers(AbstractPlot):
             poly = np_array(poly)
             if len(mono) > 0:
                 mono_bottom, b, p = ax.hist(mono, bins=bins,
-                          color=(152.0/255,223.0/255,138.0/255),
+                          color=self.mono_color,
                           alpha=0.5,
                           weights=0.9 * (1.0 / max_bin_count) * np_ones_like(mono),
                           bottom=i,
@@ -543,7 +550,7 @@ class Outliers(AbstractPlot):
 
             if len(near_mono) > 0:
                 near_mono_bottom, b, p = ax.hist(near_mono, bins=bins,
-                                              color=(255.0/255,187.0/255,120.0/255),
+                                              color=self.near_mono_color,
                                               alpha=0.5,
                                               weights=0.9 * (1.0 / max_bin_count) * np_ones_like(near_mono),
                                               bottom=i + mono_bottom,
@@ -552,7 +559,7 @@ class Outliers(AbstractPlot):
 
             if len(poly) > 0:
                 ax.hist(poly, bins=bins,
-                          color=(1.0, 0.0, 0.0),
+                          color=self.poly_color,
                           alpha=0.5,
                           weights=0.9 * (1.0 / max_bin_count) * np_ones_like(poly),
                           bottom=i + mono_bottom + near_mono_bottom,
