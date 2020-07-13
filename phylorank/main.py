@@ -168,7 +168,7 @@ class OptionsParser():
                     continue
                     
                 if options.viral:
-                    rank_label = VIRAL_RANK_LABELS[VIRAL_RANK_PREFIXES(rank_prefix)]
+                    rank_label = VIRAL_RANK_LABELS[VIRAL_RANK_PREFIXES.index(rank_prefix)]
                 else:
                     rank_label = Taxonomy.rank_labels[Taxonomy.rank_prefixes.index(rank_prefix)]
                 rank_median = median_reds[rank_label]
