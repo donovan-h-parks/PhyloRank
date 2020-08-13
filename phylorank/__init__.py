@@ -1,6 +1,8 @@
-import os
-
-# get package version
-packageDir = os.path.dirname(os.path.realpath(__file__))
-versionFile = open(os.path.join(packageDir, 'VERSION'))
-__version__ = versionFile.readline().strip()
+__author__ = 'Donovan Parks'
+__author_email__ = 'donovan.parks@gmail.com'
+__description__ = 'Assigns taxonomic ranks based on evolutionary divergence.'
+__license__ = 'GPL3'
+__status__ = 'Development'
+__title__ = 'phylorank'
+__url__ = 'https://github.com/dparks1134/PhyloRank'
+__version__ = '0.1.3'
