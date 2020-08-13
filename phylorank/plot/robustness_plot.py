@@ -16,22 +16,15 @@
 ###############################################################################
 
 import os
-import sys
-import random
 from collections import defaultdict
 
-from phylorank.rel_dist import RelativeDistance
-
-from biolib.taxonomy import Taxonomy
+import dendropy
 from biolib.plots.abstract_plot import AbstractPlot
-
 from numpy import (mean as np_mean,
-                   std as np_std,
                    arange as np_arange,
                    percentile as np_percentile)
 
-import mpld3
-import dendropy
+from phylorank.rel_dist import RelativeDistance
 
 
 class RobustnessPlot(AbstractPlot):
@@ -58,10 +51,10 @@ class RobustnessPlot(AbstractPlot):
         dict : d[taxon] -> relative distance to root
         """
 
-        tree = dendropy.Tree.get_from_path(tree_file, 
-                                            schema='newick', 
-                                            rooting='force-rooted', 
-                                            preserve_underscores=True)
+        tree = dendropy.Tree.get_from_path(tree_file,
+                                           schema='newick',
+                                           rooting='force-rooted',
+                                           preserve_underscores=True)
 
         # calculate relative distance for all nodes
         rd = RelativeDistance()
@@ -100,15 +93,16 @@ class RobustnessPlot(AbstractPlot):
 
         return rel_dists_to_taxon, dist_components_taxon, polyphyletic
 
-    def run(self, rank, input_tree_dir, full_tree_file, derep_tree_file, taxonomy_file, output_prefix, min_children, title):
+    def run(self, rank, input_tree_dir, full_tree_file, derep_tree_file, taxonomy_file,
+            output_prefix, min_children, title):
 
         # determine named clades in full tree
         named_clades = set()
-        tree = dendropy.Tree.get_from_path(full_tree_file, 
-                                            schema='newick', 
-                                            rooting='force-rooted', 
-                                            preserve_underscores=True)
-        
+        tree = dendropy.Tree.get_from_path(full_tree_file,
+                                           schema='newick',
+                                           rooting='force-rooted',
+                                           preserve_underscores=True)
+
         for node in tree.preorder_node_iter():
             if node.label:
                 taxonomy = node.label.split(';')
@@ -141,11 +135,13 @@ class RobustnessPlot(AbstractPlot):
         # calculate RED for full tree
         print('')
         print('Calculating RED over full tree.')
-        tree = dendropy.Tree.get_from_path(full_tree_file, 
-                                            schema='newick', 
-                                            rooting='force-rooted', 
-                                            preserve_underscores=True)
-        full_rel_dist, _full_dist_components, polyphyletic = self.rel_dist_to_specified_groups(tree, groups_to_consider, groups)
+        tree = dendropy.Tree.get_from_path(full_tree_file,
+                                           schema='newick',
+                                           rooting='force-rooted',
+                                           preserve_underscores=True)
+        full_rel_dist, _full_dist_components, polyphyletic = self.rel_dist_to_specified_groups(tree,
+                                                                                               groups_to_consider,
+                                                                                               groups)
         if len(polyphyletic) > 0:
             print('')
             print('[Warning] Full tree contains polyphyletic groups.')
@@ -153,15 +149,18 @@ class RobustnessPlot(AbstractPlot):
         # calculate RED for dereplicated tree
         print('')
         print('Calculating RED over dereplicated tree.')
-        tree = dendropy.Tree.get_from_path(derep_tree_file, 
-                                            schema='newick', 
-                                            rooting='force-rooted', 
-                                            preserve_underscores=True)
-        
-        derep_rel_dist, derep_dist_components, polyphyletic = self.rel_dist_to_specified_groups(tree, groups_to_consider, groups)
+        tree = dendropy.Tree.get_from_path(derep_tree_file,
+                                           schema='newick',
+                                           rooting='force-rooted',
+                                           preserve_underscores=True)
+
+        derep_rel_dist, derep_dist_components, polyphyletic = self.rel_dist_to_specified_groups(tree,
+                                                                                                groups_to_consider,
+                                                                                                groups)
 
         groups_to_consider = groups_to_consider - polyphyletic
-        print('Assessing distriubtion over %d groups after removing polyphyletic groups in original trees.' % len(groups_to_consider))
+        print('Assessing distribution over %d groups after removing polyphyletic groups in original trees.' % len(
+            groups_to_consider))
 
         # calculate RED to each group in each tree
         print('')
@@ -174,10 +173,10 @@ class RobustnessPlot(AbstractPlot):
             print(f)
 
             tree_file = os.path.join(input_tree_dir, f)
-            tree = dendropy.Tree.get_from_path(tree_file, 
-                                            schema='newick', 
-                                            rooting='force-rooted', 
-                                            preserve_underscores=True)
+            tree = dendropy.Tree.get_from_path(tree_file,
+                                               schema='newick',
+                                               rooting='force-rooted',
+                                               preserve_underscores=True)
 
             # calculate relative distance to named taxa
             rel_dist, components, _polyphyletic = self.rel_dist_to_specified_groups(tree, groups_to_consider, groups)
@@ -197,7 +196,8 @@ class RobustnessPlot(AbstractPlot):
         perc90 = []
         labels = []
         fout = open(output_prefix + '.tsv', 'w')
-        fout.write('Taxon\tP10\tP90\tP90-P10\tMean RED\tMean dist to parent\tMean dist to leaves\tOriginal RED\tOrigial dist to parent\tOriginal dist to leaves\n')
+        fout.write('Taxon\tP10\tP90\tP90-P10\tMean RED\tMean dist to parent\tMean dist to leaves\t'
+                   'Original RED\tOrigial dist to parent\tOriginal dist to leaves\n')
         for i, taxon in enumerate(sorted(rel_dists.keys(), reverse=True)):
             labels.append(taxon + ' (%d)' % (len(rel_dists[taxon])))
 
@@ -212,7 +212,8 @@ class RobustnessPlot(AbstractPlot):
 
             mean_x, mean_a, mean_b = np_mean(dist_components[taxon], axis=0)
             derep_x, derep_a, derep_b = derep_dist_components[taxon]
-            fout.write('%s\t%.2f\t%.2f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\n' % (taxon, p10, p90, p90 - p10, mean_x, mean_a, mean_b, derep_x, derep_a, derep_b))
+            fout.write('%s\t%.2f\t%.2f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\n' % (
+            taxon, p10, p90, p90 - p10, mean_x, mean_a, mean_b, derep_x, derep_a, derep_b))
 
             xDerep.append(derep_rel_dist[taxon])
             yDerep.append(i)

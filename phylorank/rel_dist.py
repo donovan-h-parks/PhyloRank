@@ -15,24 +15,15 @@
 #                                                                             #
 ###############################################################################
 
-import os
-import sys
 import logging
 from collections import defaultdict
 
-from phylorank.newick import parse_label
-
 from biolib.taxonomy import Taxonomy
 
-import dendropy
+from phylorank.newick import parse_label
 
-from numpy import (mean as np_mean,
-                   std as np_std,
-                   arange as np_arange,
-                   percentile as np_percentile)
 
-                   
-class RelativeDistance():
+class RelativeDistance(object):
     """Determine relative rates of evolutionary divergence."""
 
     def __init__(self):
@@ -127,7 +118,7 @@ class RelativeDistance():
 
         # calculate relative distance for all nodes
         self.decorate_rel_dist(tree, mblet)
-        
+
         # tabulate values for internal nodes with ranks
         rel_dists = defaultdict(dict)
         for node in tree.preorder_node_iter(lambda n: n != tree.seed_node):
