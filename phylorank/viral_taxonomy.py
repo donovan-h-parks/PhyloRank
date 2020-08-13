@@ -95,7 +95,7 @@ def rev_translate_output_file(output_file):
     """Translate output file to viral prefixes."""
 
     if not os.path.exists(output_file):
-        print('File does not exists: {}'.format(output_file))
+        print('File does not exist: {}'.format(output_file))
         sys.exit(-1)
 
     with open(output_file) as f:
