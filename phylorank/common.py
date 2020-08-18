@@ -51,14 +51,15 @@ def read_taxa_file(taxa_file):
 
     return taxa
 
-def filter_taxa_for_dist_inference(tree, 
-                                    taxonomy, 
-                                    trusted_taxa, 
-                                    min_children, 
-                                    min_support,
-                                    fmeasure = None,
-                                    min_fmeasure = None,
-                                    report_invalid_sp = True):
+
+def filter_taxa_for_dist_inference(tree,
+                                   taxonomy,
+                                   trusted_taxa,
+                                   min_children,
+                                   min_support,
+                                   fmeasure=None,
+                                   min_fmeasure=None,
+                                   report_invalid_sp=True):
     """Determine taxa to use for inferring distribution of relative divergences.
 
     Parameters
@@ -82,12 +83,14 @@ def filter_taxa_for_dist_inference(tree,
             species_name = taxa[Taxonomy.rank_index['s__']]
             valid, error_msg = True, None
             if species_name != 's__':
-                valid, error_msg = Taxonomy().validate_species_name(species_name, require_full=True, require_prefix=True)
-                
+                valid, error_msg = Taxonomy().validate_species_name(species_name,
+                                                                    require_full=True,
+                                                                    require_prefix=True)
+
             if not valid and report_invalid_sp:
                 print('[Warning] Species name %s for %s is invalid: %s' % (species_name, taxon_id, error_msg))
                 continue
-                
+
             species.add(species_name)
 
     # restrict taxa to those with a sufficient number 
@@ -100,9 +103,9 @@ def filter_taxa_for_dist_inference(tree,
         support, taxon, _auxiliary_info = parse_label(node.label)
         if not taxon:
             continue
-            
-        taxon = taxon.split(';')[-1].strip() # get most specific taxon from compound names 
-                                             # (e.g. p__Armatimonadetes; c__Chthonomonadetes)
+
+        taxon = taxon.split(';')[-1].strip()  # get most specific taxon from compound names
+        # (e.g. p__Armatimonadetes; c__Chthonomonadetes)
 
         if support and min_support > 0 and support < min_support:
             continue
@@ -111,7 +114,7 @@ def filter_taxa_for_dist_inference(tree,
             # no support value, so inform user if they were trying to filter on this property
             print('[Error] Tree does not contain support values. As such, --min_support must be set to 0.')
             sys.exit(-1)
-            
+
         if fmeasure and fmeasure[taxon] < min_fmeasure:
             continue
 
@@ -125,8 +128,9 @@ def filter_taxa_for_dist_inference(tree,
                 taxa = taxonomy.get(leaf.taxon.label, Taxonomy.rank_prefixes)
                 if len(taxa) > child_rank_index:
                     sub_taxon = taxa[child_rank_index]
-                    
-                    if sub_taxon != Taxonomy.rank_prefixes[child_rank_index] and sub_taxon.startswith(child_rank_prefix):
+
+                    if sub_taxon != Taxonomy.rank_prefixes[child_rank_index] and sub_taxon.startswith(
+                            child_rank_prefix):
                         subordinate_taxa.add(sub_taxon)
 
             if len(subordinate_taxa) < min_children:
@@ -139,8 +143,8 @@ def filter_taxa_for_dist_inference(tree,
         taxa_for_dist_inference = trusted_taxa.intersection(taxa_for_dist_inference)
 
     return taxa_for_dist_inference
-    
-    
+
+
 def get_phyla_lineages(tree):
     """Get list of phyla level lineages.
 
@@ -164,5 +168,5 @@ def get_phyla_lineages(tree):
             taxa = [x.strip() for x in taxon_name.split(';')]
             if taxa[-1].startswith('p__'):
                 phyla.append(taxa[-1])
-                
+
     return phyla

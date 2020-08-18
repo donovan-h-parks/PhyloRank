@@ -15,28 +15,21 @@
 #                                                                             #
 ###############################################################################
 
-import os
-import sys
-from collections import defaultdict, namedtuple
+from collections import namedtuple
 
-from phylorank.rel_dist import RelativeDistance
-from phylorank.common import read_taxa_file, filter_taxa_for_dist_inference
-
-from biolib.taxonomy import Taxonomy
+import dendropy
+import mpld3
 from biolib.plots.abstract_plot import AbstractPlot
-
+from biolib.taxonomy import Taxonomy
 from numpy import (mean as np_mean,
                    std as np_std,
-                   median as np_median,
                    arange as np_arange,
                    linspace as np_linspace,
                    percentile as np_percentile)
-
 from scipy.stats import norm
 
-import mpld3
-
-import dendropy
+from phylorank.common import read_taxa_file, filter_taxa_for_dist_inference
+from phylorank.rel_dist import RelativeDistance
 
 
 class DistributionPlot(AbstractPlot):
@@ -92,7 +85,7 @@ class DistributionPlot(AbstractPlot):
             y_mean_corr = []
             for test_r in np_linspace(parent_p50, child_p50, 100):
                 parent_cor = float(sum([1 for rd in parent_rds if rd <= test_r])) / len(parent_rds)
-                child_cor = float(sum([1 for rd in  child_rds if rd > test_r])) / len(child_rds)
+                child_cor = float(sum([1 for rd in child_rds if rd > test_r])) / len(child_rds)
 
                 r.append(test_r)
                 y_parent.append(parent_cor)
@@ -141,7 +134,8 @@ class DistributionPlot(AbstractPlot):
 
         return rel_dist_thresholds
 
-    def _distribution_plot(self, rel_dists, rel_dist_thresholds, taxa_for_dist_inference, distribution_table, plot_file):
+    def _distribution_plot(self, rel_dists, rel_dist_thresholds, taxa_for_dist_inference,
+                           distribution_table, plot_file):
         """Create plot showing the distribution of taxa at each taxonomic rank.
 
         Parameters
@@ -272,10 +266,10 @@ class DistributionPlot(AbstractPlot):
         """
 
         # read tree
-        tree = dendropy.Tree.get_from_path(input_tree, 
-                                            schema='newick', 
-                                            rooting='force-rooted', 
-                                            preserve_underscores=True)
+        tree = dendropy.Tree.get_from_path(input_tree,
+                                           schema='newick',
+                                           rooting='force-rooted',
+                                           preserve_underscores=True)
 
         # read taxa to plot
         taxa_to_plot = None

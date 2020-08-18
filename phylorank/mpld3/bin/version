@@ -1,6 +1,0 @@
-#!/usr/bin/env node
-
-process.argv.forEach(function (val, index, array) {
-  if (index==2) 
-  	console.log("mpld3.version = '" + val + "';");
-});
