@@ -268,6 +268,56 @@ class Decorate(object):
                 ','.join(stat_table.rogue_in)))
 
         fout_table.close()
+        
+    def _write_summary_table(self, fmeasure_for_taxa, taxonomy, summary_table):
+        """Write table containing statistics for each taxonomic rank.
+        
+        Parameters
+        ----------
+        fmeasure_for_taxa : d[taxon] -> [(Node, F-measure, precision, recall)]
+          Node with highest F-measure for each taxon.
+        taxonomy : d[unique_id] -> [d__<taxon>; ...; s__<taxon>]
+          Taxonomic information for taxa in tree of interest.
+        summary_table : str
+          Output table to write statistics for assigned labels.  
+        """
+
+        # get number of monophyletic, operationally monophyletic, and polyphyletic
+        # taxa at each taxonomic rank
+        taxon_count = defaultdict(int)
+        mono = defaultdict(int)
+        op_mono = defaultdict(int)
+        poly = defaultdict(int)
+        for taxon in Taxonomy().sort_taxa(fmeasure_for_taxa.keys()):
+            if len(fmeasure_for_taxa[taxon]) != 1:
+                self.logger.error('Multiple positions specified for taxon label.')
+                sys.exit()
+                
+            rank_prefix = taxon[0:3]
+            taxon_count[rank_prefix] += 1
+
+            stat_table = fmeasure_for_taxa[taxon][0]
+            if stat_table.fmeasure == 1.0:
+                mono[rank_prefix] += 1
+            elif stat_table.fmeasure >= 0.95:
+                op_mono[rank_prefix] += 1
+            else:
+                poly[rank_prefix] += 1
+
+        fout = open(out_table, 'w')
+        fout.write('Rank\tNo. taxon')
+        fout.write('\tNo. monophyletic\tNo. operationally monophyletic\tNo. polyphyletic')
+        fout.write('\tMonophyletic (%)\tOperationally monophyletic (%)\tPolyphyletic (%)\n')
+        for idx, rank_prefix in enumerate(Taxonomy.rank_prefixes):
+            fout.write('{}\t{}'.format(Taxonomy.rank_labels[idx],
+                                        taxon_count[rank_prefix]))
+            fout.write('\t{}\t{}\t{}'.format(mono[rank_prefix],
+                                                op_mono[rank_prefix],
+                                                poly[rank_prefix]))
+            fout.write('\t{:.3f}\t{:.3f}\t{:.3f}'.format(mono[rank_prefix]*100.0/taxon_count[rank_prefix],
+                                                            op_mono[rank_prefix]*100.0/taxon_count[rank_prefix],
+                                                            poly[rank_prefix]*100.0/taxon_count[rank_prefix]))
+        fout.close()
 
     def _leaf_taxa(self, leaf):
         """Get taxonomic information for leaf node.
@@ -584,6 +634,9 @@ class Decorate(object):
         self.logger.info('Writing out statistics for taxa.')
         out_table = output_tree + '-table'
         self._write_statistics_table(fmeasure_for_taxa, taxonomy, out_table)
+        
+        summary_table = output_tree + '-summary'
+        self._write_summary_table(fmeasure_for_taxa, taxonomy, summary_table)
 
         # output taxonomy of extant taxa on tree
         self.logger.info('Writing out taxonomy for extant taxa.')
@@ -602,3 +655,4 @@ class Decorate(object):
             rev_translate_output_file(out_table)
             rev_translate_output_file(out_taxonomy)
             rev_translate_output_file(output_tree)
+
