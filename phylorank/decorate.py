@@ -314,7 +314,7 @@ class Decorate(object):
             fout.write('\t{}\t{}\t{}'.format(mono[rank_prefix],
                                                 op_mono[rank_prefix],
                                                 poly[rank_prefix]))
-            fout.write('\t{:.3f}\t{:.3f}\t{:.3f}'.format(mono[rank_prefix]*100.0/taxon_count[rank_prefix],
+            fout.write('\t{:.3f}\t{:.3f}\t{:.3f}\n'.format(mono[rank_prefix]*100.0/taxon_count[rank_prefix],
                                                             op_mono[rank_prefix]*100.0/taxon_count[rank_prefix],
                                                             poly[rank_prefix]*100.0/taxon_count[rank_prefix]))
         fout.close()
