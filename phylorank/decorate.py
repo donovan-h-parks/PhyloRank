@@ -304,7 +304,7 @@ class Decorate(object):
             else:
                 poly[rank_prefix] += 1
 
-        fout = open(out_table, 'w')
+        fout = open(summary_table, 'w')
         fout.write('Rank\tNo. taxon')
         fout.write('\tNo. monophyletic\tNo. operationally monophyletic\tNo. polyphyletic')
         fout.write('\tMonophyletic (%)\tOperationally monophyletic (%)\tPolyphyletic (%)\n')
