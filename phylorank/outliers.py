@@ -19,10 +19,10 @@ import logging
 import os
 import random
 import sys
+import copy
 from collections import defaultdict, namedtuple
 
 import dendropy
-import mpld3
 from biolib.plots.abstract_plot import AbstractPlot
 from biolib.taxonomy import Taxonomy
 from numpy import (median as np_median,
@@ -56,10 +56,14 @@ class Outliers(AbstractPlot):
     indicating the median distance over all rootings.
     """
 
-    def __init__(self, dpi=96, output_dir=None):
+    def __init__(self, skip_mpld3=False, dpi=96, output_dir=None):
         """Initialize."""
 
         self.logger = logging.getLogger()
+        
+        self.skip_mpld3 = skip_mpld3
+        if not self.skip_mpld3:
+            import mpld3
 
         Options = namedtuple('Options', 'width height tick_font_size label_font_size dpi')
         options = Options(5, 4, 12, 12, 96)
@@ -313,10 +317,11 @@ class Outliers(AbstractPlot):
         self.prettify(ax)
 
         # make plot interactive
-        mpld3.plugins.clear(self.fig)
-        mpld3.plugins.connect(self.fig, mpld3.plugins.PointLabelTooltip(scatter, labels=labels))
-        mpld3.plugins.connect(self.fig, mpld3.plugins.MousePosition(fontsize=10))
-        mpld3.save_html(self.fig, plot_file[0:plot_file.rfind('.')] + '.html')
+        if not self.skip_mpld3:
+            mpld3.plugins.clear(self.fig)
+            mpld3.plugins.connect(self.fig, mpld3.plugins.PointLabelTooltip(scatter, labels=labels))
+            mpld3.plugins.connect(self.fig, mpld3.plugins.MousePosition(fontsize=10))
+            mpld3.save_html(self.fig, plot_file[0:plot_file.rfind('.')] + '.html')
 
         self.fig.tight_layout(pad=1)
         self.fig.savefig(plot_file, dpi=self.dpi)
@@ -581,10 +586,11 @@ class Outliers(AbstractPlot):
         self.prettify(ax)
 
         # make plot interactive
-        mpld3.plugins.clear(self.fig)
-        mpld3.plugins.connect(self.fig, mpld3.plugins.PointLabelTooltip(scatter, labels=labels))
-        mpld3.plugins.connect(self.fig, mpld3.plugins.MousePosition(fontsize=10))
-        mpld3.save_html(self.fig, plot_file[0:plot_file.rfind('.')] + '.html')
+        if not self.skip_mpld3:
+            mpld3.plugins.clear(self.fig)
+            mpld3.plugins.connect(self.fig, mpld3.plugins.PointLabelTooltip(scatter, labels=labels))
+            mpld3.plugins.connect(self.fig, mpld3.plugins.MousePosition(fontsize=10))
+            mpld3.save_html(self.fig, plot_file[0:plot_file.rfind('.')] + '.html')
 
         self.fig.tight_layout(pad=1)
         self.fig.savefig(plot_file, dpi=self.dpi)
@@ -814,8 +820,11 @@ class Outliers(AbstractPlot):
     def _write_rd_tree(self, tree, rel_node_dists, output_tree):
         """Write out tree with RED specified at each internal node."""
 
-        for node_id, n in enumerate(tree.preorder_node_iter()):
-            if n == tree.seed_node:
+        # copy tree so node labels aren't changed in original tree
+        red_tree = copy.deepcopy(tree)
+
+        for node_id, n in enumerate(red_tree.preorder_node_iter()):
+            if n == red_tree.seed_node:
                 red = 0
             else:
                 red = np_median(rel_node_dists[node_id])
@@ -829,10 +838,10 @@ class Outliers(AbstractPlot):
                 else:
                     n.label = red_str
 
-        tree.write_to_path(output_tree,
-                           schema='newick',
-                           suppress_rooting=True,
-                           unquoted_underscores=True)
+        red_tree.write_to_path(output_tree,
+                               schema='newick',
+                               suppress_rooting=True,
+                               unquoted_underscores=True)
 
     def read_fmeasure(self, fmeasure_table):
         """Read table with F-measure for taxa."""
@@ -900,7 +909,6 @@ class Outliers(AbstractPlot):
                                            rooting='force-rooted',
                                            preserve_underscores=True)
 
-        orig_tree = tree.clone(depth=1)
         input_tree_name = os.path.splitext(os.path.basename(input_tree))[0]
 
         # pull taxonomy from tree and file
@@ -1115,7 +1123,7 @@ class Outliers(AbstractPlot):
                                               verbose_table)
 
             output_rd_tree = os.path.join(self.output_dir, '{}.red_decorated.tree'.format(input_tree_name))
-            self._write_rd_tree(orig_tree, rel_node_dists, output_rd_tree)
+            self._write_rd_tree(tree, rel_node_dists, output_rd_tree)
 
         output_rd_file = os.path.join(self.output_dir, '{}.node_rd.tsv'.format(input_tree_name))
         self._write_rd(tree, output_rd_file)

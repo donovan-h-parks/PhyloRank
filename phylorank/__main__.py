@@ -141,6 +141,7 @@ def main(args=None):
     outliers_parser.add_argument('--highlight_taxa_file', help='file indicating taxa to highlight')
     outliers_parser.add_argument('--dpi', help='DPI of plots', type=int, default=96)
     outliers_parser.add_argument('--verbose_table', action="store_true", help='add additional columns to output table')
+    outliers_parser.add_argument('--skip_mpld3', action="store_true", help='skip plots requiring mpld3')
 
     # create table and plot useful for identifying taxonomic outliers.
     scale_tree_parser = subparsers.add_parser('scale_tree',

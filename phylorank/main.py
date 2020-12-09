@@ -33,7 +33,6 @@ from phylorank.decorate import Decorate
 from phylorank.mark_tree import MarkTree
 from phylorank.newick import parse_label
 from phylorank.outliers import Outliers
-from phylorank.plot.distribution_plot import DistributionPlot
 from phylorank.plot.robustness_plot import RobustnessPlot
 from phylorank.rd_ranks import RdRanks
 from phylorank.rel_dist import RelativeDistance
@@ -68,7 +67,7 @@ class OptionsParser(object):
             self.logger.error("The '--highlight_polyphyly' flag must be used with the '--fmeasure_table' flag.")
             return
 
-        o = Outliers(options.dpi, options.output_dir)
+        o = Outliers(options.skip_mpld3, options.dpi, options.output_dir)
         o.run(options.input_tree,
               options.taxonomy_file,
               options.viral,
@@ -186,27 +185,6 @@ class OptionsParser(object):
                 fout.write('\n')
 
         fout.close()
-
-    def dist_plot(self, options):
-        """Distribution plot command"""
-
-        check_file_exists(options.input_tree)
-
-        if options.plot_taxa_file:
-            check_file_exists(options.plot_taxa_file)
-
-        if options.trusted_taxa_file:
-            check_file_exists(options.trusted_taxa_file)
-
-        dist_plot = DistributionPlot()
-        dist_plot.run(options.input_tree,
-                      options.output_prefix,
-                      options.plot_taxa_file,
-                      options.trusted_taxa_file,
-                      options.min_children,
-                      options.min_support)
-
-        self.logger.info('Done.')
 
     def mark_tree(self, options):
         """Mark tree command."""
@@ -494,8 +472,6 @@ class OptionsParser(object):
             self.taxon_stats(options)
         elif options.subparser_name == 'robustness_plot':
             self.robustness_plot(options)
-        elif options.subparser_name == 'dist_plot':
-            self.dist_plot(options)
         elif options.subparser_name == 'rd_ranks':
             self.rd_ranks(options)
         elif options.subparser_name == 'bl_dist':
