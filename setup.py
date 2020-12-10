@@ -1,6 +1,6 @@
 import os
 import re
-from distutils.core import setup
+from setuptools import setup, find_packages
 
 
 def read_meta():
@@ -46,7 +46,7 @@ setup(
     long_description=readme(),
     long_description_content_type='text/markdown',
     name=meta['title'],
-    packages=['phylorank', 'phylorank.plot'],
+    packages=find_packages(),
     project_urls={
         "Bug Tracker": "https://github.com/dparks1134/PhyloRank/issues",
         "Documentation": "https://github.com/dparks1134/PhyloRank",
