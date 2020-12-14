@@ -17,6 +17,7 @@
 
 import logging
 import sys
+import time
 from collections import defaultdict, namedtuple
 
 import dendropy
@@ -76,9 +77,11 @@ class Decorate(object):
         # get number of leaves and taxon in each lineage
         self.logger.info('Calculating taxa within each lineage.')
         for node in tree.preorder_node_iter():
+            gids = set()
             num_leaves = 0
             taxa_count = defaultdict(lambda: defaultdict(int))
             for leaf in node.leaf_iter():
+                gids.add(leaf.taxon.label)
                 num_leaves += 1
                 for rank_index, taxon in enumerate(taxonomy[leaf.taxon.label]):
                     if taxon != Taxonomy.rank_prefixes[rank_index]:
@@ -86,6 +89,7 @@ class Decorate(object):
 
             node.num_leaves = num_leaves
             node.taxa_count = taxa_count
+            node.descendant_gids = gids
 
         taxa_in_tree = defaultdict(int)
         for leaf in tree.leaf_node_iter():
@@ -95,13 +99,12 @@ class Decorate(object):
         # find node with best F-measure for each taxon
         fmeasure_for_taxa = {}
         for rank_index in range(0, len(Taxonomy.rank_labels)):
-            # if rank_index == 6: #*** skip species
-            #    continue 
+            start = time.time()
             self.logger.info('Processing {:,} taxa at {} rank.'.format(
                 len(taxa_at_rank[rank_index]),
                 Taxonomy.rank_labels[rank_index].capitalize()))
 
-            for taxon in taxa_at_rank[rank_index]:
+            for idx, taxon in enumerate(taxa_at_rank[rank_index]):
                 if rank_index == 0:
                     # processing taxa at the domain is a special case
                     taxon_parent_node = tree.seed_node
@@ -140,8 +143,7 @@ class Decorate(object):
                         continue
 
                 cur_taxon_fmeasure = -1
-                cur_taxa = set(extent_taxa_with_label[rank_index][taxon])
-                total_taxa = len(cur_taxa)
+                cur_gids = set(extent_taxa_with_label[rank_index][taxon])
 
                 for node in taxon_parent_node.preorder_iter():
                     taxa_in_lineage = node.taxa_count[rank_index][taxon]
@@ -149,32 +151,43 @@ class Decorate(object):
 
                     if taxa_in_lineage != 0 and num_leaves_with_taxa != 0:
                         precision = float(taxa_in_lineage) / num_leaves_with_taxa
-                        recall = float(taxa_in_lineage) / total_taxa
+                        recall = float(taxa_in_lineage) / len(cur_gids)
                         fmeasure = (2 * precision * recall) / (precision + recall)
 
                         if fmeasure >= cur_taxon_fmeasure:
-                            node_taxa = set([l.taxon.label for l in node.leaf_iter()])
-                            rogue_out = cur_taxa - node_taxa
-                            rogue_in = []
-                            for gid in node_taxa - cur_taxa:
-                                if taxonomy[gid][rank_index] != Taxonomy.rank_prefixes[rank_index]:
-                                    rogue_in.append(gid)
+                            descendant_gids = node.descendant_gids
+                            rogue_out = cur_gids - descendant_gids
+                            rogue_in = [gid
+                                        for gid in descendant_gids - cur_gids 
+                                        if taxonomy[gid][rank_index] != Taxonomy.rank_prefixes[rank_index]]
 
-                            stat_table = self.StatsTable(node=node,
-                                                         fmeasure=fmeasure,
-                                                         precision=precision,
-                                                         recall=recall,
-                                                         taxa_in_lineage=taxa_in_lineage,
-                                                         total_taxa=total_taxa,
-                                                         num_leaves_with_taxa=num_leaves_with_taxa,
-                                                         rogue_out=rogue_out,
-                                                         rogue_in=rogue_in)
+                            if fmeasure >= cur_taxon_fmeasure:
+                                stat_table = self.StatsTable(node=node,
+                                                             fmeasure=fmeasure,
+                                                             precision=precision,
+                                                             recall=recall,
+                                                             taxa_in_lineage=taxa_in_lineage,
+                                                             total_taxa=len(cur_gids),
+                                                             num_leaves_with_taxa=num_leaves_with_taxa,
+                                                             rogue_out=rogue_out,
+                                                             rogue_in=rogue_in)
 
-                            if fmeasure > cur_taxon_fmeasure:
-                                cur_taxon_fmeasure = fmeasure
-                                fmeasure_for_taxa[taxon] = [stat_table]
-                            elif fmeasure == cur_taxon_fmeasure:
-                                fmeasure_for_taxa[taxon].append(stat_table)
+                                if fmeasure > cur_taxon_fmeasure:
+                                    cur_taxon_fmeasure = fmeasure
+                                    fmeasure_for_taxa[taxon] = [stat_table]
+                                elif fmeasure == cur_taxon_fmeasure:
+                                    fmeasure_for_taxa[taxon].append(stat_table)
+
+                statusStr = ' - processed {:,} of {:,} ({:.2f}%) taxa.'.format(
+                                    idx+1, 
+                                    len(taxa_at_rank[rank_index]), 
+                                    float(idx*100)/len(taxa_at_rank[rank_index])).ljust(86)
+                sys.stdout.write('%s\r' % statusStr)
+                sys.stdout.flush()
+
+            sys.stdout.write('\n')
+            end = time.time()
+            print(' - elapsed time: {:.2f} minutes'.format((end-start)/60.0))
 
         return fmeasure_for_taxa
 
