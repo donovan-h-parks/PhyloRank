@@ -39,7 +39,7 @@ setup(
         ]
     },
     install_requires=['biolib >= 0.1.0', 'numpy', 'matplotlib',
-                      'dendropy>=4.1.0', 'scipy', 'mpld3>=0.2'],
+                      'dendropy>=4.1.0', 'scipy', 'mpld3>=0.5.0'],
     keywords='phylogenetics taxonomy relative evolutionary divergence tree '
              'decorate decoration',
     license=meta['license'],
