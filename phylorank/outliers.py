@@ -42,6 +42,7 @@ from phylorank.viral_taxonomy import (VIRAL_RANK_LABELS,
                                       translate_viral_tree,
                                       rev_translate_output_file,
                                       read_viral_taxonomy_from_tree)
+import mpld3
 
 
 class Outliers(AbstractPlot):
@@ -755,7 +756,7 @@ class Outliers(AbstractPlot):
         self.logger.info('Using %d phyla as rootings for inferring distributions.' % len(phyla))
         if len(phyla) < 2:
             self.logger.error('Rescaling requires at least 2 valid phyla.')
-            sys.exit(-1)
+            sys.exit(1)
 
         # give each node a unique id
         for i, n in enumerate(tree.preorder_node_iter()):

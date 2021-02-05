@@ -109,7 +109,7 @@ class RogueTest(object):
                 for n in tree.leaf_node_iter():
                     genome_count[n.taxon.label] += 1
         self.logger.info('Genomes were identified in %.1f%% of the %d input trees on average.' % (
-            np_mean(genome_count.values()) * 100.0 / tree_count,
+            np_mean(list(genome_count.values())) * 100.0 / tree_count,
             tree_count))
 
         # determine rogue out and rogue in genomes

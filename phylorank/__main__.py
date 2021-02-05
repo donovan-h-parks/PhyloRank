@@ -400,6 +400,7 @@ def main(args=None):
             parser.parse_options(args)
     except SystemExit:
         print("\n  Controlled exit resulting from an unrecoverable error or warning.")
+        sys.exit(1)
     except:
         print("\nUnexpected error:", sys.exc_info()[0])
         raise

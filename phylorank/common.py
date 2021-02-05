@@ -113,7 +113,7 @@ def filter_taxa_for_dist_inference(tree,
         if not support and min_support > 0:
             # no support value, so inform user if they were trying to filter on this property
             print('[Error] Tree does not contain support values. As such, --min_support must be set to 0.')
-            sys.exit(-1)
+            sys.exit(1)
 
         if fmeasure and fmeasure[taxon] < min_fmeasure:
             continue

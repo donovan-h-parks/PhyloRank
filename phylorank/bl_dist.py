@@ -686,11 +686,22 @@ class BranchLengthDistribution(object):
         fout.write('Rank\tMean\tStd\t5th\t10th\t50th\t90th\t95th\n')
         for rank in Taxonomy.rank_labels:
             dist = rank_bl_dist[rank]
-            p = np_percentile(dist, [5, 10, 50, 90, 95])
-            fout.write('%s\t%g\t%g\t%g\t%g\t%g\t%g\t%g\n' % (rank,
-                                                             np_mean(dist),
-                                                             np_std(dist),
-                                                             p[0], p[1], p[2], p[3], p[4]))
+            if len(dist) == 0:
+                p = ['N/A' for _ in range(5)]
+                r_mean = 'N/A'
+                r_std = 'N/A'
+                fout.write('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' % (rank,
+                                                                 r_mean,
+                                                                 r_std,
+                                                                 p[0], p[1], p[2], p[3], p[4]))
+            else:
+                p = np_percentile(dist, [5, 10, 50, 90, 95])
+                r_mean = np_mean(dist)
+                r_std = np_std(dist)
+                fout.write('%s\t%g\t%g\t%g\t%g\t%g\t%g\t%g\n' % (rank,
+                                                                 r_mean,
+                                                                 r_std,
+                                                                 p[0], p[1], p[2], p[3], p[4]))
         fout.close()
 
         # report results for each node
