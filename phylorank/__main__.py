@@ -79,7 +79,7 @@ def logger_setup(log_file, silent):
 
     # setup general properties of logger
     logger = logging.getLogger('')
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     log_format = logging.Formatter(fmt="[%(asctime)s] %(levelname)s: %(message)s",
                                    datefmt="%Y-%m-%d %H:%M:%S")
 
@@ -87,7 +87,7 @@ def logger_setup(log_file, silent):
     if not silent:
         stream_logger = logging.StreamHandler(sys.stdout)
         stream_logger.setFormatter(log_format)
-        stream_logger.setLevel(logging.DEBUG)
+        stream_logger.setLevel(logging.INFO)
         logger.addHandler(stream_logger)
 
     if log_file:
