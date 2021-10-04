@@ -21,6 +21,7 @@ import time
 from collections import defaultdict, namedtuple
 
 import dendropy
+from biolib.common import canonical_gid
 from biolib.newick import parse_label, create_label
 from biolib.taxonomy import Taxonomy
 from numpy import (median as np_median)
@@ -43,7 +44,7 @@ class Decorate(object):
         self.StatsTable = namedtuple('StatsTable',
                                      'node fmeasure precision recall taxa_in_lineage total_taxa num_leaves_with_taxa rogue_out rogue_in')
 
-    def _fmeasure(self, tree, taxonomy):
+    def _fmeasure(self, tree, taxonomy, skip_species=False):
         """Find node with highest F-measure for each taxon.
         
         Finds best placement for each taxon label
@@ -99,6 +100,9 @@ class Decorate(object):
         # find node with best F-measure for each taxon
         fmeasure_for_taxa = {}
         for rank_index in range(0, len(Taxonomy.rank_labels)):
+            if skip_species and rank_index == Taxonomy.SPECIES_INDEX:
+                continue
+                
             start = time.time()
             self.logger.info('Processing {:,} taxa at {} rank.'.format(
                 len(taxa_at_rank[rank_index]),
@@ -181,7 +185,7 @@ class Decorate(object):
                 statusStr = ' - processed {:,} of {:,} ({:.2f}%) taxa.'.format(
                                     idx+1, 
                                     len(taxa_at_rank[rank_index]), 
-                                    float(idx*100)/len(taxa_at_rank[rank_index])).ljust(86)
+                                    float((idx+1)*100)/len(taxa_at_rank[rank_index])).ljust(86)
                 sys.stdout.write('%s\r' % statusStr)
                 sys.stdout.flush()
 
@@ -322,6 +326,9 @@ class Decorate(object):
         fout.write('\tNo. monophyletic\tNo. operationally monophyletic\tNo. polyphyletic')
         fout.write('\tMonophyletic (%)\tOperationally monophyletic (%)\tPolyphyletic (%)\n')
         for idx, rank_prefix in enumerate(Taxonomy.rank_prefixes):
+            if taxon_count[rank_prefix] == 0:
+                continue
+                
             fout.write('{}\t{}'.format(Taxonomy.rank_labels[idx],
                                         taxon_count[rank_prefix]))
             fout.write('\t{}\t{}\t{}'.format(mono[rank_prefix],
@@ -404,7 +411,6 @@ class Decorate(object):
         fout = open(out_taxonomy, 'w')
         for leaf in tree.leaf_node_iter():
             taxa = self._leaf_taxa(leaf)
-            # taxa = self._resolve_missing_taxa(taxa)
             fout.write('%s\t%s\n' % (leaf.taxon.label, '; '.join(taxa)))
 
         fout.close()
@@ -551,35 +557,202 @@ class Decorate(object):
             # remove other potential node assignments
             fmeasure_for_taxa[taxon] = [fmeasure_for_taxa[taxon][closest_index]]
 
+    def parse_gtdb_metadata(self, gtdb_metadata):
+        """Parse GTDB metadata to establish stems for placeholder and Latin names for each GTDB representative."""
+        
+        rep_placeholder_stems = defaultdict(set)
+        rep_latin_stems = {}
+        if gtdb_metadata:
+            self.logger.info('Reading GTDB metadata.')
+
+            with open(gtdb_metadata) as f:
+                header = f.readline().strip().split('\t')
+                
+                gid_idx = header.index('formatted_accession')
+                
+                gtdb_rep_idx = header.index('gtdb_genome_representative')
+                
+                ncbi_strain_identifiers_idx = header.index('ncbi_strain_identifiers') 
+                ncbi_wgs_formatted_idx = header.index('ncbi_wgs_formatted')
+                ncbi_taxonomy_idx = header.index('ncbi_taxonomy')
+                ncbi_org_name_idx = header.index('ncbi_organism_name')
+                
+                gtdb_type_species_of_genus_idx = header.index('gtdb_type_species_of_genus')
+                
+                for line in f:
+                    tokens = line.strip().split('\t')
+                    
+                    gid = tokens[gid_idx]
+                    
+                    gtdb_rid = canonical_gid(tokens[gtdb_rep_idx])
+                    if not gtdb_rid: # genome failed QC so has no GTDB representative
+                        continue
+                        
+                    ncbi_org_name = tokens[ncbi_org_name_idx]
+                    last_ncbi_org_name = ncbi_org_name.split()[-1]
+                    if any(c.isdigit() for c in last_ncbi_org_name) or any(c.isupper() for c in last_ncbi_org_name):
+                        # looks like a strain/genome designation that may have been used
+                        # to form a GTDB taxon name
+                        last_ncbi_org_name = last_ncbi_org_name.replace('_', '-').replace(':', '-')
+                        rep_placeholder_stems[gtdb_rid].add(last_ncbi_org_name)
+                        rep_placeholder_stems[gtdb_rid].add(last_ncbi_org_name.upper())
+                        rep_placeholder_stems[gtdb_rid].add(last_ncbi_org_name.capitalize())
+                        rep_placeholder_stems[gtdb_rid].add(last_ncbi_org_name.upper()[:15])
+                        rep_placeholder_stems[gtdb_rid].add(last_ncbi_org_name.upper()[-15:])
+                        
+                        # long names with hyphens (underscores) were truncated from back to start
+                        # (e.g. GW2011_GWF2_32_72 -> GWF2-32-72
+                        if len(last_ncbi_org_name) > 15:
+                            placeholder_tokens = last_ncbi_org_name.split('-')
+                            for start_idx in range(1, len(placeholder_tokens)):
+                                if len(placeholder_tokens[start_idx]) > 0 and placeholder_tokens[start_idx][0].isalpha():
+                                    placeholder = '-'.join(placeholder_tokens[start_idx:])
+
+                                    if len(placeholder) < 15:
+                                        rep_placeholder_stems[gtdb_rid].add(placeholder)
+                                        rep_placeholder_stems[gtdb_rid].add(placeholder.upper())
+                                        break
+
+                    ncbi_strain_id = tokens[ncbi_strain_identifiers_idx].replace('_', '-').replace(' ', '-')
+                    ncbi_strain_id = ''.join([ch for ch in ncbi_strain_id if ch.isalnum() or ch == '-'])
+                    ncbi_strain_id = ncbi_strain_id.capitalize()
+                    if len(ncbi_strain_id) > 12:
+                        ncbi_strain_id = ncbi_strain_id[0:12]
+
+                    rep_placeholder_stems[gtdb_rid].add(ncbi_strain_id)
+                    rep_placeholder_stems[gtdb_rid].add(ncbi_strain_id.upper())
+                    rep_placeholder_stems[gtdb_rid].add(tokens[ncbi_wgs_formatted_idx])
+                    rep_placeholder_stems[gtdb_rid].add(tokens[ncbi_wgs_formatted_idx])
+                    rep_placeholder_stems[gtdb_rid].add(gid.replace('G', 'GCA-'))
+                    rep_placeholder_stems[gtdb_rid].add(gid.replace('G', 'GCF-'))
+                    
+                    # There are names like f__GCA-2401445 which were derived from G002401445
+                    gid_no_leading_zeros = 'G'
+                    for idx, ch in enumerate(gid[1:]):
+                        if ch != '0':
+                            gid_no_leading_zeros += gid[idx+1:] 
+                            break
+
+                    rep_placeholder_stems[gtdb_rid].add(gid.replace('G', 'GCA-'))
+                    rep_placeholder_stems[gtdb_rid].add(gid.replace('G', 'GCF-'))
+                    rep_placeholder_stems[gtdb_rid].add(gid_no_leading_zeros.replace('G', 'GCA-'))
+                    rep_placeholder_stems[gtdb_rid].add(gid_no_leading_zeros.replace('G', 'GCF-'))
+                    
+                    if gid == gtdb_rid and tokens[gtdb_type_species_of_genus_idx].lower().startswith('t'):
+                        # add in stem of genus name. Ideally, we would derive the family, order, and
+                        # class names from the genus name. However, this appears to be complicated 
+                        # as, for example, the family name of Aquifex is Aquificaceae. How does one
+                        # know to insert a "ic" in this case?
+                        ncbi_genus = [t.strip() for t in tokens[ncbi_taxonomy_idx].split(';')][Taxonomy.GENUS_INDEX]
+                        ncbi_genus_stem = ncbi_genus[3:-2] # does chopping the last 2 characters work in all cases?
+                        rep_latin_stems[gtdb_rid] = ncbi_genus_stem
+                    
+            self.logger.info(' - determined placeholder stems for {:,} genomes.'.format(len(rep_placeholder_stems)))
+            self.logger.info(' - determined Latin stems for {:,} genomes.'.format(len(rep_latin_stems)))
+        
+        return rep_placeholder_stems, rep_latin_stems
+
+    def resolve_equal_fmeasure(self, fmeasure_for_taxa, rep_placeholder_stems, rep_latin_stems, output_tree):
+        """Resolve taxa with >=2 nodes resulting in the same, highest scoring F-measure."""
+        
+        # There are two situations where this occurs:
+        # 1) 2 or more nodes in the same lineage have the same F-measure. This occurs 
+        #    whenever a parant node does not introduce any new descedant genomes with
+        #    a priori names, or when moving to the parent simply results in the same
+        #    F-measure. This situation is resolved by takeing the most terminal placement
+        #    for the taxon in order to be conservative.
+        # 2) 2 or more nodes in different lineages have the same F-measure. For example,
+        #    a genus defined by only 2 genomes and the two genomes are not monophyletic 
+        #    in the tree. This case is resolved by considering the taxon names that can
+        #    be derived from the stem name of genomes. This is a very GTDB-specific solution,
+        #    especially for placeholder names. As an example, if the placement of o__GCF-002020875
+        #    is polyphyletic it should be put in the lineage leading to the genome GCF_002020875.
+        
+        if rep_placeholder_stems:
+            fout = open(output_tree + '-unresolved', 'w')
+            
+        ambiguous_lineage = set()
+        poly_taxa = set()
+        matched_stem_count = 0
+        for taxon, fmeasures in fmeasure_for_taxa.items():
+            if len(fmeasures) != 1:
+                # check if all nodes are in a single lineage,
+                # or if best placement of taxon is polyphyletic
+                poly = False
+                for idx, info in enumerate(fmeasures):
+                    if idx+1 == len(fmeasures):
+                        continue # skip last case
+                        
+                    if fmeasures[idx+1].node.parent_node != info.node:
+                        poly = True
+                        break
+                        
+                if poly:
+                    poly_taxa.add(taxon)
+                    
+                    # try to resolve using stems for taxon names
+                    if rep_placeholder_stems:
+                        matched_stem = False
+                        for info in reversed(fmeasure_for_taxa[taxon]):
+                            for rid in info.node.descendant_gids:
+                                if (rid in rep_latin_stems
+                                    and taxon[3:].startswith(rep_latin_stems[rid])):
+                                    matched_stem = [info, stem]
+                                else:
+                                    for stem in rep_placeholder_stems[rid]:
+                                        if stem == taxon[3:]:
+                                            matched_stem = [info, stem]
+                                            break
+                               
+                                if matched_stem:
+                                    break
+                                    
+                            if matched_stem:
+                                break
+                                
+                        if matched_stem:
+                            matched_stem_count += 1
+                            info, stem = matched_stem
+                            fmeasure_for_taxa[taxon] = [info]
+                        else:
+                            fmeasure_for_taxa[taxon] = [fmeasures[-1]]
+                            fout.write(taxon + '\n')
+                    else:
+                        fmeasure_for_taxa[taxon] = [fmeasures[-1]]
+                else:
+                    ambiguous_lineage.add(taxon)
+                    fmeasure_for_taxa[taxon] = [fmeasures[-1]]
+                    
+        if rep_placeholder_stems:
+            fout.close()
+                    
+        if len(ambiguous_lineage) > 0:
+            self.logger.warning('There are {:,} taxon with multiple placements of equal quality within a single lineage.'.format(len(ambiguous_lineage)))
+            self.logger.warning(' - these were resolved by placing the label at the most terminal position')
+            
+        if len(poly_taxa) > 0:
+            self.logger.warning('There are {:,} taxon with multiple, polyphyletic placements of equal quality.'.format(len(poly_taxa)))
+            
+            preorder_count = len(poly_taxa) - matched_stem_count
+            self.logger.warning(' - {:,} of these were resolved by selecting the last placement in a preorder traversal of the tree'.format(preorder_count))
+            self.logger.warning(' - {:,} of these were resolved by selecting the lineage which matched the stem name of a descendant genome'.format(matched_stem_count))
+        
     def run(self,
             input_tree,
             taxonomy_file,
             viral,
+            skip_species,
+            gtdb_metadata,
             trusted_taxa_file,
             min_children,
             min_support,
             skip_rd_refine,
             output_tree):
-        """Decorate internal nodes with taxa labels.
-
-        Parameters
-        ----------
-        input_tree : str
-          Tree to decorate
-        taxonomy_file : str
-          File indicating taxonomic information for extant taxa.
-        trusted_taxa_file : str
-          File specifying trusted taxa to consider when inferring distribution. Set to None to consider all taxa.
-        min_children : int
-          Only consider taxa with at least the specified number of children taxa when inferring distribution.
-        min_support : float
-          Only consider taxa with at least this level of support when inferring distribution.
-        skip_rd_refine : boolean
-          Skip refinement of taxonomy based on relative divergence information.
-        output_tree: str
-          Name of output tree.
-        """
-
+        """Decorate internal nodes with taxa labels based on F-measure."""
+        
+        # read GTDB metadata
+        rep_placeholder_stems, rep_latin_stems = self.parse_gtdb_metadata(gtdb_metadata)
+        
         # read tree
         self.logger.info('Reading tree.')
         tree = dendropy.Tree.get_from_path(input_tree,
@@ -606,7 +779,7 @@ class Decorate(object):
         # find best placement for each taxon based 
         # on the F-measure statistic
         self.logger.info('Calculating F-measure statistic for each taxa.')
-        fmeasure_for_taxa = self._fmeasure(tree, taxonomy)
+        fmeasure_for_taxa = self._fmeasure(tree, taxonomy, skip_species)
 
         # calculating relative
         if not skip_rd_refine:
@@ -628,17 +801,12 @@ class Decorate(object):
             self.logger.info('Resolving ambiguous taxon label placements using median relative divergences.')
             self._resolve_ambiguous_placements(fmeasure_for_taxa, median_rank_rd)
         else:
-            # simply select most terminal placement in order to be conservative
-            ambiguous_placements = set()
-            for taxon, fmeasures in fmeasure_for_taxa.items():
-                if len(fmeasures) != 1:
-                    ambiguous_placements.add(taxon)
-                    fmeasure_for_taxa[taxon] = [fmeasures[-1]]
-
-            if len(ambiguous_placements) > 0:
-                self.logger.warning('There are %d taxon with multiple placements of equal quality.' % len(ambiguous_placements))
-                self.logger.warning('These were resolved by placing the label at a terminal position.')
-
+            # resolve cases where 2 or more nodes have the same F-measure
+            self.resolve_equal_fmeasure(fmeasure_for_taxa, 
+                                        rep_placeholder_stems, 
+                                        rep_latin_stems,
+                                        output_tree)
+                                        
             # place all labels on tree
             self.logger.info('Placing labels on tree.')
             placed_taxon = self._assign_taxon_labels(fmeasure_for_taxa)

@@ -136,7 +136,7 @@ class MarkTree(object):
                 n.label += predicted_rank
 
             if show_relative_divergence:
-                n.label += '[rd=%.2f]' % n.rel_dist
+                n.label += '[rd=%.3f]' % n.rel_dist
 
             if taxon_name and predicted_rank != self.highly_basal_designator:
                 # tabulate number of correct and incorrect predictions

@@ -229,9 +229,11 @@ def main(args=None):
     decorate_parser.add_argument('taxonomy_file', help='file indicating taxonomy of extant taxa')
     decorate_parser.add_argument('output_tree', help='decorated tree')
     decorate_parser.add_argument('--viral', action="store_true", help='indicates a viral input tree and taxonomy')
+    decorate_parser.add_argument('--skip_species', action="store_true", help='skip decoration of species')
     decorate_parser.add_argument('--skip_rd_refine',
                                  help="skip refinement of taxonomy based on relative divergence information",
                                  action='store_true')
+    decorate_parser.add_argument('--gtdb_metadata', help='GTDB metadata file (used to resolve ambiguous cases)')
     decorate_parser.add_argument('-t', '--trusted_taxa_file',
                                  help="file indicating trusted taxonomic groups to use for inferring distribution (default: all taxa)",
                                  default=None)

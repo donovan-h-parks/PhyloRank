@@ -233,6 +233,8 @@ class OptionsParser(object):
         decorate.run(options.input_tree,
                      options.taxonomy_file,
                      options.viral,
+                     options.skip_species,
+                     options.gtdb_metadata,
                      options.trusted_taxa_file,
                      options.min_children,
                      options.min_support,
