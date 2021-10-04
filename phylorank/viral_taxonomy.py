@@ -52,7 +52,7 @@ def translate_viral_taxonomy(taxonomy):
             prefix = taxon[0:3]
             if prefix not in VIRAL_PREFIX_TRANSLATION:
                 print('Unrecognized viral prefix for {}: {}'.format(gid, prefix))
-                sys.exit(-1)
+                sys.exit(1)
 
             translated_taxa.append(taxon.replace(prefix, VIRAL_PREFIX_TRANSLATION[prefix]))
 
@@ -83,7 +83,7 @@ def translate_viral_tree(tree):
             prefix = taxon[0:3]
             if prefix not in VIRAL_PREFIX_TRANSLATION:
                 print('Unrecognized viral prefix for {}: {}'.format(taxon, prefix))
-                sys.exit(-1)
+                sys.exit(1)
 
             translated_taxa.append(taxon.replace(prefix, VIRAL_PREFIX_TRANSLATION[prefix]))
 
@@ -96,7 +96,7 @@ def rev_translate_output_file(output_file):
 
     if not os.path.exists(output_file):
         print('File does not exist: {}'.format(output_file))
-        sys.exit(-1)
+        sys.exit(1)
 
     with open(output_file) as f:
         content = f.read()
@@ -151,13 +151,13 @@ def read_viral_taxonomy_from_tree(tree):
         if len(taxa) > 7:
             logger = logging.getLogger()
             logger.error('Invalid taxonomy string read from tree for taxon %s: %s' % (leaf.taxon.label, ';'.join(taxa)))
-            sys.exit(-1)
+            sys.exit(1)
 
         for taxon in taxa:
             prefix = taxon[0:3]
             if prefix not in VIRAL_PREFIX_TRANSLATION:
                 print('Unrecognized viral prefix for {}: {}'.format(taxon, prefix))
-                sys.exit(-1)
+                sys.exit(1)
 
         # fill missing ranks
         try:
@@ -165,7 +165,7 @@ def read_viral_taxonomy_from_tree(tree):
         except:
             logger = logging.getLogger()
             logger.error('Taxon {} is missing rank prefix: {}'.format(leaf.taxon.label, ';'.join(taxa)))
-            sys.exit(-1)
+            sys.exit(1)
 
         for i in range(last_rank + 1, len(VIRAL_RANK_PREFIXES)):
             taxa.append(VIRAL_RANK_PREFIXES[i])

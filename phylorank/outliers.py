@@ -42,7 +42,38 @@ from phylorank.viral_taxonomy import (VIRAL_RANK_LABELS,
                                       translate_viral_tree,
                                       rev_translate_output_file,
                                       read_viral_taxonomy_from_tree)
+import mpld3
 
+
+class AxisReplacer(mpld3.plugins.PluginBase):
+    """Replaces the y axis labels with the provided list"""
+
+    JAVASCRIPT = """
+    mpld3.register_plugin("axisreplacer", AxisReplacer);
+    AxisReplacer.prototype = Object.create(mpld3.Plugin.prototype);
+    AxisReplacer.prototype.constructor = AxisReplacer;
+    AxisReplacer.prototype.requiredProps = ["data"];
+    AxisReplacer.prototype.defaultProps = {}
+    function AxisReplacer(fig, props){
+        mpld3.Plugin.call(this, fig, props);
+    };
+
+    AxisReplacer.prototype.draw = function(){
+        let data = this.props.data;
+        let parent = document.getElementsByClassName("mpld3-yaxis")[0];
+        let gTicks = parent.getElementsByTagName("g");
+        for (let i=0; i < gTicks.length; i++) {
+            let curTick = gTicks[i];
+            let curText = curTick.getElementsByTagName("text")[0];
+            curText.innerHTML = data[i];
+        }        
+    };
+    """
+
+    def __init__(self, linedata):
+
+        self.dict_ = {"type": "axisreplacer",
+                      "data": linedata}
 
 class Outliers(AbstractPlot):
     """Identify outliers based on relative distances.
@@ -321,6 +352,7 @@ class Outliers(AbstractPlot):
             mpld3.plugins.clear(self.fig)
             mpld3.plugins.connect(self.fig, mpld3.plugins.PointLabelTooltip(scatter, labels=labels))
             mpld3.plugins.connect(self.fig, mpld3.plugins.MousePosition(fontsize=10))
+            mpld3.plugins.connect(self.fig, AxisReplacer(rank_labels))
             mpld3.save_html(self.fig, plot_file[0:plot_file.rfind('.')] + '.html')
 
         self.fig.tight_layout(pad=1)
@@ -590,6 +622,7 @@ class Outliers(AbstractPlot):
             mpld3.plugins.clear(self.fig)
             mpld3.plugins.connect(self.fig, mpld3.plugins.PointLabelTooltip(scatter, labels=labels))
             mpld3.plugins.connect(self.fig, mpld3.plugins.MousePosition(fontsize=10))
+            mpld3.plugins.connect(self.fig, AxisReplacer(rank_labels))
             mpld3.save_html(self.fig, plot_file[0:plot_file.rfind('.')] + '.html')
 
         self.fig.tight_layout(pad=1)
@@ -755,7 +788,7 @@ class Outliers(AbstractPlot):
         self.logger.info('Using %d phyla as rootings for inferring distributions.' % len(phyla))
         if len(phyla) < 2:
             self.logger.error('Rescaling requires at least 2 valid phyla.')
-            sys.exit(-1)
+            sys.exit(1)
 
         # give each node a unique id
         for i, n in enumerate(tree.preorder_node_iter()):
