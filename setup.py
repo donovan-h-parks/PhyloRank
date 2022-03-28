@@ -1,5 +1,6 @@
 import os
 import re
+
 from setuptools import setup, find_packages
 
 
@@ -29,6 +30,7 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
         'Topic :: Scientific/Engineering :: Bio-Informatics',
     ],
     data_files=[("", ["LICENSE"])],
@@ -38,8 +40,14 @@ setup(
             'phylorank = phylorank.__main__:main'
         ]
     },
-    install_requires=['biolib >= 0.1.0', 'numpy', 'matplotlib',
-                      'dendropy>=4.1.0', 'scipy', 'mpld3>=0.5.2'],
+    install_requires=[
+        'biolib >= 0.1.0',
+        'numpy',
+        'matplotlib<3.5.0',  # mpld3 doesn't support 3.5.0 yet as IndexFormatter was replaced with FuncFormatter
+        'dendropy>=4.1.0',
+        'scipy',
+        'mpld3>=0.5.2'
+    ],
     keywords='phylogenetics taxonomy relative evolutionary divergence tree '
              'decorate decoration',
     license=meta['license'],
