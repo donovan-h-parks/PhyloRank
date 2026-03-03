@@ -10,10 +10,10 @@ PhyloRank provides functionality for calculating the relative evolutionary diver
 
 ## Install
 
-The simplest way to install this package is through Bioconda:
+The simplest way to install this package is through Bioconda with fixed versions for `matplotlib` and `mpld3`:
 
 ```shell
-conda install -c bioconda phylorank
+mamba create -n phylorank -c bioconda phylorank matplotlib=3.3.4 mpld3=0.5.11
 ```
 
 Alternatively, it can be installed through PyPI:
